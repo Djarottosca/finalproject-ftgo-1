@@ -210,7 +210,7 @@ erDiagram
         int id PK
         string full_name
         string username
-        string password
+        string password_hash
         string email
         string status
         int role_id FK
@@ -218,11 +218,13 @@ erDiagram
     ROLES {
         int id PK
         string role_name
+        string role_slug
     }
     SUPPLIERS {
         int id PK
         int user_id FK
         string store_name
+        string supplier_slug
         string address
         string status
     }
@@ -239,10 +241,12 @@ erDiagram
     CATEGORIES {
         int id PK
         string category_name
+        string category_slug
     }
     PRODUCTS {
         int id PK
         string product_name
+        string product_slug
         int category_id FK
         string unit
         int stock
@@ -276,6 +280,7 @@ erDiagram
         int id PK
         int order_id FK
         int product_id FK
+        decimal price
         int qty
         decimal subtotal
     }
@@ -311,19 +316,21 @@ erDiagram
 
 ## 7. Detail Tabel Database
 
-1. **users** — id, full_name, username, password (hashed), email, status, role_id (FK ke roles) → satu akun cuma bisa punya satu role, jadi login credentials (username/password/email) selalu ada di satu tempat, gak digandakan ke tabel lain
-2. **roles** — id, role_name
-3. **suppliers** — id, user_id (FK, karena supplier juga login lewat `users`), store_name, address, status
+1. **users** — id, full_name, username, password_hash, email, status, role_id (FK ke roles) → satu akun cuma bisa punya satu role, jadi login credentials (username/password/email) selalu ada di satu tempat, gak digandakan ke tabel lain
+2. **roles** — id, role_name, role_slug → role_slug jadi key stabil di middleware RBAC, gak ikut berubah kalau role_name diganti jadi label display
+3. **suppliers** — id, user_id (FK, karena supplier juga login lewat `users`), store_name, supplier_slug, address, status
 4. **addresses** — id, user_id, label, full_address, city, district, postal_code, is_primary → dibutuhkan buat hitung ongkir RajaOngkir
-5. **categories** — id, category_name → lebih baik daripada free text field, biar konsisten & gampang di-filter
-6. **products** — id, product_name, category_id (FK), unit, stock, supplier_id, price, description, discount_type, discount_amount, status
+5. **categories** — id, category_name, category_slug → lebih baik daripada free text field, biar konsisten & gampang di-filter
+6. **products** — id, product_name, product_slug, category_id (FK), unit, stock, supplier_id, price, description, discount_type, discount_amount, status
 7. **product_images** — id, product_id, image_url → biar bisa multi-foto per produk
 8. **carts** — user_id, product_id, qty
 9. **orders** — id, user_id, total_price, discount, total_items, final_price, status
-10. **order_items** — id, order_id, product_id, qty, subtotal
+10. **order_items** — id, order_id, product_id, price, qty, subtotal → price disalin dari products.price saat order dibuat, biar histori order gak berubah kalau supplier ganti harga produk belakangan
 11. **payments** — id, order_id, amount, tax, status, payment_link, payment_reference, shipping_cost_estimate
 12. **shipments** — id, order_id, shipping_id, status, tracking_number, courier, actual_shipping_cost
 13. **reviews** — id, user_id, product_id, rating, comment
+
+> Kolom `*_slug` (roles, suppliers, categories, products) unique dan dipakai untuk URL/identitas publik yang SEO-friendly. `product_slug` khususnya digenerate app layer dengan suffix (mis. id produk atau random short code), karena `product_name` gak dijamin unique antar supplier.
 
 > Fitur reward/voucher untuk sementara di-drop dari scope (masih brainstorming). Kalau nanti mau dilanjutkan, rencananya jadi microservice terpisah — jadi nggak masuk skema database ini.
 
