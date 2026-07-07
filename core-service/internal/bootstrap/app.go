@@ -1,6 +1,11 @@
 package bootstrap
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
@@ -11,9 +16,9 @@ import (
 )
 
 type App struct {
-	cfg *config.Config
-	db  *gorm.DB
-	rdb *redis.Client
+	Config   *config.Config
+	Database *gorm.DB
+	Redis    *redis.Client
 }
 
 func NewApp() *App {
@@ -37,8 +42,32 @@ func NewApp() *App {
 	logger.Log.Info().Msg("app bootstrapped")
 
 	return &App{
-		cfg: cfg,
-		db:  db,
-		rdb: rdb,
+		Config:   cfg,
+		Database: db,
+		Redis:    rdb,
 	}
+}
+
+// RunServer blocks serving the HTTP API.
+func (a *App) RunServer() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	logger.Log.Info().Msg("starting server")
+
+	<-ctx.Done()
+
+	logger.Log.Info().Msg("shutting down")
+}
+
+// RunWorker blocks running the Asynq worker.
+func (a *App) RunWorker() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	logger.Log.Info().Msg("starting worker")
+
+	<-ctx.Done()
+
+	logger.Log.Info().Msg("shutting down")
 }
