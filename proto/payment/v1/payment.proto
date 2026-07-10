@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package payment.v1;
+
+option go_package = "github.com/Djarottosca/finalproject-ftgo-1/proto/payment/v1;paymentv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Di-implement oleh payment-service, dipanggil oleh core-service.
+// Method callback "sudah paid" TIDAK di sini, itu kontrak milik core.
+service PaymentService {
+  // Dipanggil core pas checkout: bikin invoice ke provider, balikin link bayar.
+  rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse);
+
+  // Fallback kalau webhook Xendit kelewat: core nanya status terkini by reference.
+  rpc GetPaymentStatus(GetPaymentStatusRequest) returns (GetPaymentStatusResponse);
+}
+
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  PAYMENT_STATUS_PENDING = 1;
+  PAYMENT_STATUS_PAID = 2;
+  PAYMENT_STATUS_EXPIRED = 3;
+  PAYMENT_STATUS_FAILED = 4;
+}
+
+message CreatePaymentRequest {
+  int64 order_id = 1;         // dipakai sebagai external_id ke Xendit → korelasi webhook tanpa DB
+  int64 user_id = 2;
+  string customer_name = 3;
+  string customer_email = 4;  // tujuan email invoice dari Xendit
+  int64 amount = 5;           // OTORITATIF. Rupiah utuh, integer, bukan float.
+  string description = 6;
+  repeated PaymentItem items = 7;   // opsional, display-only, diteruskan apa adanya ke Xendit
+  string idempotency_key = 8;       // opsional, hardening kalau race di core kebobolan
+}
+
+message PaymentItem {
+  string name = 1;
+  int32 quantity = 2;
+  int64 price = 3;            // rupiah utuh per item
+}
+
+message CreatePaymentResponse {
+  string payment_reference = 1;   // invoice id dari provider (mis. Xendit invoice id)
+  string payment_link = 2;        // URL redirect user buat bayar
+  PaymentStatus status = 3;       // umumnya PENDING pas baru dibuat
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message GetPaymentStatusRequest {
+  string payment_reference = 1;
+}
+
+message GetPaymentStatusResponse {
+  string payment_reference = 1;
+  int64 order_id = 2;
+  PaymentStatus status = 3;
+}

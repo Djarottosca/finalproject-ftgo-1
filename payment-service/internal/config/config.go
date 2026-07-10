@@ -7,18 +7,26 @@ import (
 )
 
 type Config struct {
-	App    AppConfig
-	Xendit XenditConfig
+	App      AppConfig
+	Provider ProviderConfig
+	Xendit   XenditConfig
 }
 
 type AppConfig struct {
-	Env  string
-	Host string
-	Port int
+	Env      string
+	Host     string
+	GRPCPort int
+	HTTPPort int
+	BaseURL  string // URL publik payment-service, buat nyusun link simulasi
+}
+
+type ProviderConfig struct {
+	Name string // "simulation" | "xendit"
 }
 
 type XenditConfig struct {
-	APIKey string
+	APIKey        string
+	CallbackToken string
 }
 
 func Load() (*Config, error) {
@@ -34,16 +42,25 @@ func Load() (*Config, error) {
 
 	v.SetDefault("PAYMENT_ENV", "development")
 	v.SetDefault("PAYMENT_HOST", "0.0.0.0")
-	v.SetDefault("PAYMENT_PORT", 9001)
+	v.SetDefault("PAYMENT_GRPC_PORT", 9001)
+	v.SetDefault("PAYMENT_HTTP_PORT", 9002)
+	v.SetDefault("PAYMENT_BASE_URL", "http://localhost:9002")
+	v.SetDefault("PAYMENT_PROVIDER", "simulation")
 
 	cfg := &Config{
 		App: AppConfig{
-			Env:  v.GetString("PAYMENT_ENV"),
-			Host: v.GetString("PAYMENT_HOST"),
-			Port: v.GetInt("PAYMENT_PORT"),
+			Env:      v.GetString("PAYMENT_ENV"),
+			Host:     v.GetString("PAYMENT_HOST"),
+			GRPCPort: v.GetInt("PAYMENT_GRPC_PORT"),
+			HTTPPort: v.GetInt("PAYMENT_HTTP_PORT"),
+			BaseURL:  v.GetString("PAYMENT_BASE_URL"),
+		},
+		Provider: ProviderConfig{
+			Name: v.GetString("PAYMENT_PROVIDER"),
 		},
 		Xendit: XenditConfig{
-			APIKey: v.GetString("XENDIT_API_KEY"),
+			APIKey:        v.GetString("XENDIT_API_KEY"),
+			CallbackToken: v.GetString("XENDIT_CALLBACK_TOKEN"),
 		},
 	}
 
