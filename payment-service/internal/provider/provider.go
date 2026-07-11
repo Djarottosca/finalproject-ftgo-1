@@ -23,7 +23,7 @@ type CreateInvoiceParams struct {
 	UserID         int64
 	CustomerName   string
 	CustomerEmail  string
-	Amount         int64 // rupiah 
+	Amount         int64 // rupiah
 	Description    string
 	Items          []InvoiceItem // opsional, display-only
 	IdempotencyKey string        // opsional

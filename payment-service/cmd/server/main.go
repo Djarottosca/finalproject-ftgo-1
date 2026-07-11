@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 

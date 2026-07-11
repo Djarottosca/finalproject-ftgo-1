@@ -10,7 +10,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/cache"
