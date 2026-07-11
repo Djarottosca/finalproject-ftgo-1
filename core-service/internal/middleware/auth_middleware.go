@@ -3,9 +3,10 @@ package middleware
 import (
 	"net/http"
 
+	echo "github.com/labstack/echo/v4"
+
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/jwt"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/response"
-	"github.com/labstack/echo/v4"
 )
 
 func AuthMiddleware(authManager *jwt.AuthManager) echo.MiddlewareFunc {

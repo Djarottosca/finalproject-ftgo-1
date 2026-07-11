@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/response"
 )

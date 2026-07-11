@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	redis "github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
