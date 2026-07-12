@@ -1,8 +1,3 @@
-// Package grpcserver mengimplementasikan notificationv1.NotificationServiceServer
-// sesuai kontrak di proto/notification/v1/notification.proto.
-//
-// CATATAN: setelah `make proto` dijalankan, kode hasil generate protoc akan
-// muncul di proto/notification/v1/ (notification.pb.go & notification_grpc.pb.go).
 package grpcserver
 
 import (
@@ -15,23 +10,16 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/notification-service/internal/provider"
 )
 
-// Server mengimplementasikan notificationv1.NotificationServiceServer.
-// Sengaja tipis: gak ada business logic di sini, cuma validasi input dan
-// delegasi ke provider.EmailSender (Mailjet). Ini bikin server gampang
-// di-unit-test tanpa mock library eksternal, cukup mock EmailSender.
 type Server struct {
 	notificationv1.UnimplementedNotificationServiceServer
 	sender provider.EmailSender
 	log    zerolog.Logger
 }
 
-// NewServer membuat instance grpc server baru.
 func NewServer(sender provider.EmailSender, log zerolog.Logger) *Server {
 	return &Server{sender: sender, log: log}
 }
 
-// SendEmail dipanggil oleh core-service (langsung, atau lewat Asynq worker
-// saat order berubah status jadi "paid") untuk mengirim satu email.
 func (s *Server) SendEmail(ctx context.Context, req *notificationv1.SendEmailRequest) (*notificationv1.SendEmailResponse, error) {
 	if req.GetToEmail() == "" {
 		return &notificationv1.SendEmailResponse{

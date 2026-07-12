@@ -1,9 +1,3 @@
-// Package provider berisi adapter ke pihak ketiga (Mailjet). Dipanggil lewat
-// REST API v3.1 langsung (net/http), bukan pakai SDK pihak ketiga, supaya
-// tidak menambah dependency eksternal yang belum tentu perlu di-vendor.
-//
-// EmailSender di-expose sebagai interface supaya package grpcserver bisa
-// di-unit-test pakai mock, tanpa benar-benar manggil API Mailjet.
 package provider
 
 import (
@@ -20,14 +14,10 @@ import (
 
 const mailjetSendURL = "https://api.mailjet.com/v3.1/send"
 
-// EmailSender adalah kontrak pengiriman email. grpcserver bergantung ke
-// interface ini, bukan ke MailjetProvider secara langsung.
 type EmailSender interface {
 	SendEmail(ctx context.Context, req SendEmailInput) (SendEmailOutput, error)
 }
 
-// SendEmailInput adalah representasi internal, terlepas dari struct hasil
-// generate proto, supaya package provider tidak bergantung ke generated code.
 type SendEmailInput struct {
 	ToEmail     string
 	ToName      string
@@ -36,12 +26,10 @@ type SendEmailInput struct {
 	TextContent string
 }
 
-// SendEmailOutput adalah hasil pengiriman email.
 type SendEmailOutput struct {
 	MessageID string
 }
 
-// MailjetProvider adalah implementasi EmailSender yang manggil Mailjet Send API v3.1.
 type MailjetProvider struct {
 	apiKey      string
 	apiSecret   string
@@ -50,7 +38,6 @@ type MailjetProvider struct {
 	httpClient  *http.Client
 }
 
-// NewMailjetProvider membuat provider baru dari MailjetConfig.
 func NewMailjetProvider(cfg config.MailjetConfig) *MailjetProvider {
 	return &MailjetProvider{
 		apiKey:      cfg.APIKey,
@@ -93,7 +80,6 @@ type mailjetResponseBody struct {
 	} `json:"Messages"`
 }
 
-// SendEmail mengirim satu email lewat Mailjet.
 func (p *MailjetProvider) SendEmail(ctx context.Context, in SendEmailInput) (SendEmailOutput, error) {
 	if in.ToEmail == "" {
 		return SendEmailOutput{}, fmt.Errorf("to_email wajib diisi")

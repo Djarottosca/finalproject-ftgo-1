@@ -30,8 +30,6 @@ func main() {
 	grpcServer := grpc.NewServer()
 	notificationv1.RegisterNotificationServiceServer(grpcServer, notifServer)
 
-	// Reflection diaktifkan supaya bisa dites via Postman / grpcurl tanpa
-	// perlu import file .proto manual di client.
 	reflection.Register(grpcServer)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
