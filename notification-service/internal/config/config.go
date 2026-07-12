@@ -18,8 +18,10 @@ type AppConfig struct {
 }
 
 type MailjetConfig struct {
-	APIKey    string
-	APISecret string
+	APIKey      string
+	APISecret   string
+	SenderEmail string
+	SenderName  string
 }
 
 func Load() (*Config, error) {
@@ -44,8 +46,10 @@ func Load() (*Config, error) {
 			Port: v.GetInt("NOTIFICATION_PORT"),
 		},
 		Mailjet: MailjetConfig{
-			APIKey:    v.GetString("MAILJET_API_KEY"),
-			APISecret: v.GetString("MAILJET_API_SECRET"),
+			APIKey:      v.GetString("MAILJET_API_KEY"),
+			APISecret:   v.GetString("MAILJET_API_SECRET"),
+			SenderEmail: v.GetString("MAILJET_SENDER_EMAIL"),
+			SenderName:  v.GetString("MAILJET_SENDER_NAME"),
 		},
 	}
 
