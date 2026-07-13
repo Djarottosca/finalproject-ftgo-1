@@ -1,22 +1,18 @@
 package supplier
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
-	"regexp"
-	"strings"
 
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
+	"github.com/Djarottosca/finalproject-ftgo-1/pkg/slug"
 )
 
 var (
-	ErrNotFound        = errors.New("supplier not found")
-	ErrAlreadyExists   = errors.New("user already registered as supplier")
-	ErrInvalidStatus   = errors.New("status must be approved or rejected")
-	slugNonAlnumRegexp = regexp.MustCompile(`[^a-z0-9]+`)
+	ErrNotFound      = errors.New("supplier not found")
+	ErrAlreadyExists = errors.New("user already registered as supplier")
+	ErrInvalidStatus = errors.New("status must be approved or rejected")
 )
 
 // Repository defines the persistence contract for suppliers, so tests can
@@ -56,7 +52,7 @@ func (s *service) Register(userID int, req RegisterRequest) (*SupplierResponse, 
 	supplier := &models.Supplier{
 		UserID:       userID,
 		StoreName:    req.StoreName,
-		SupplierSlug: generateSlug(req.StoreName),
+		SupplierSlug: slug.Generate(req.StoreName),
 		Address:      req.Address,
 		Status:       models.SupplierStatusPending,
 	}
@@ -112,19 +108,7 @@ func (s *service) Review(id int, req ReviewRequest) (*SupplierResponse, error) {
 	return toResponse(supplier), nil
 }
 
-// generateSlug builds a URL-safe, unique-enough slug from the store name.
-// ponytail: no DB collision check beyond the unique constraint + random
-// suffix. Good enough at this scale; add a retry-on-conflict loop if
-// duplicate store names become common.
-func generateSlug(storeName string) string {
-	base := slugNonAlnumRegexp.ReplaceAllString(strings.ToLower(storeName), "-")
-	base = strings.Trim(base, "-")
 
-	suffix := make([]byte, 3)
-	_, _ = rand.Read(suffix)
-
-	return base + "-" + hex.EncodeToString(suffix)
-}
 
 func toResponse(supplier *models.Supplier) *SupplierResponse {
 	return &SupplierResponse{
