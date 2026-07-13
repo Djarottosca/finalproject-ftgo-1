@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package notification.v1;
+
+option go_package = "github.com/Djarottosca/finalproject-ftgo-1/proto/notification/v1;notificationv1";
+
+// NotificationService dipanggil oleh core-service (langsung atau lewat job
+// Asynq, mis. saat order berubah status jadi "paid") untuk mengirim email
+// notifikasi ke user. Service ini stateless, tidak punya database sendiri.
+service NotificationService {
+  rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+}
+
+message SendEmailRequest {
+  string to_email     = 1; // wajib
+  string to_name      = 2; // opsional, buat personalisasi "Halo, {to_name}"
+  string subject      = 3; // wajib
+  string html_content = 4; // body HTML
+  string text_content = 5; // fallback plain text (opsional)
+}
+
+message SendEmailResponse {
+  bool   success    = 1;
+  string message    = 2; // pesan human-readable, misal "email terkirim" / alasan gagal
+  string message_id = 3; // ID dari Mailjet, buat tracing/log
+}
