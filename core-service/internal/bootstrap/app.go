@@ -2,16 +2,23 @@ package bootstrap
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
-	"github.com/redis/go-redis/v9"
+	echo "github.com/labstack/echo/v4"
+	echoMiddleware "github.com/labstack/echo/v4/middleware"
+	redis "github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/cache"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/config"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/database"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
+	"github.com/Djarottosca/finalproject-ftgo-1/pkg/jwt"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
 )
 
@@ -53,11 +60,33 @@ func (a *App) RunServer() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	logger.Log.Info().Msg("starting server")
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+
+	e.Use(echoMiddleware.RequestID())
+	e.Use(echoMiddleware.Recover())
+	e.Use(middleware.RequestLoggerMiddleware())
+
+	authManager := jwt.NewAuthManager(a.Config.JWTSecret)
+	authService := auth.NewService(authManager)
+	authHandler := auth.NewHandler(authService)
+	authHandler.RegisterRoutes(e)
+
+	go func() {
+		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)
+		logger.Log.Info().Str("addr", addr).Msg("starting server")
+		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
+			logger.Log.Fatal().Err(err).Msg("server error")
+		}
+	}()
 
 	<-ctx.Done()
 
 	logger.Log.Info().Msg("shutting down")
+	if err := e.Shutdown(context.Background()); err != nil {
+		logger.Log.Fatal().Err(err).Msg("server shutdown error")
+	}
 }
 
 // RunWorker blocks running the Asynq worker.
