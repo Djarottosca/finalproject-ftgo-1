@@ -15,16 +15,6 @@ var (
 	ErrInvalidStatus = errors.New("status must be approved or rejected")
 )
 
-// Repository defines the persistence contract for suppliers, so tests can
-// substitute a mock instead of hitting Postgres.
-type Repository interface {
-	Create(supplier *models.Supplier) error
-	FindByID(id int) (*models.Supplier, error)
-	FindByUserID(userID int) (*models.Supplier, error)
-	List(status string) ([]models.Supplier, error)
-	Update(supplier *models.Supplier) error
-}
-
 // Service defines the supplier use cases exposed to the handler layer.
 type Service interface {
 	Register(userID int, req RegisterRequest) (*SupplierResponse, error)
@@ -106,17 +96,4 @@ func (s *service) Review(id int, req ReviewRequest) (*SupplierResponse, error) {
 	}
 
 	return toResponse(supplier), nil
-}
-
-
-
-func toResponse(supplier *models.Supplier) *SupplierResponse {
-	return &SupplierResponse{
-		ID:        supplier.ID,
-		UserID:    supplier.UserID,
-		StoreName: supplier.StoreName,
-		Slug:      supplier.SupplierSlug,
-		Address:   supplier.Address,
-		Status:    supplier.Status,
-	}
 }

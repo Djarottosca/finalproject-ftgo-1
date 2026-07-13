@@ -6,6 +6,16 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
 )
 
+// Repository defines the persistence contract for suppliers, so tests can
+// substitute a mock instead of hitting Postgres.
+type Repository interface {
+	Create(supplier *models.Supplier) error
+	FindByID(id int) (*models.Supplier, error)
+	FindByUserID(userID int) (*models.Supplier, error)
+	List(status string) ([]models.Supplier, error)
+	Update(supplier *models.Supplier) error
+}
+
 type gormRepository struct {
 	db *gorm.DB
 }
