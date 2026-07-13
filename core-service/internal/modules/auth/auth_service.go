@@ -10,7 +10,7 @@ var ErrInvalidCredentials = errors.New("invalid username or password")
 
 type credential struct {
 	Password string
-	UserID   uint
+	UserID   int
 	Role     string
 }
 
@@ -22,15 +22,21 @@ var staticUsers = map[string]credential{
 	"user":     {Password: "user123", UserID: 3, Role: "user"},
 }
 
-type Service struct {
+// Service defines the auth use cases exposed to the handler layer.
+type Service interface {
+	Login(req LoginRequest) (*LoginResponse, error)
+}
+
+type service struct {
 	auth *jwt.AuthManager
 }
 
-func NewService(auth *jwt.AuthManager) *Service {
-	return &Service{auth: auth}
+// NewService returns the Service implementation.
+func NewService(auth *jwt.AuthManager) Service {
+	return &service{auth: auth}
 }
 
-func (s *Service) Login(req LoginRequest) (*LoginResponse, error) {
+func (s *service) Login(req LoginRequest) (*LoginResponse, error) {
 	cred, ok := staticUsers[req.Username]
 	if !ok || cred.Password != req.Password {
 		return nil, ErrInvalidCredentials

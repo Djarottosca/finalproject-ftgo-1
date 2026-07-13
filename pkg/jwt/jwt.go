@@ -9,7 +9,7 @@ import (
 
 type JwtClaims struct {
 	jwt.RegisteredClaims
-	UserID uint   `json:"user_id"`
+	UserID int    `json:"user_id"`
 	Role   string `json:"role"`
 }
 
@@ -23,7 +23,7 @@ func NewAuthManager(secret string) *AuthManager {
 	}
 }
 
-func (am *AuthManager) GenerateToken(userID uint, role string) (*string, error) {
+func (am *AuthManager) GenerateToken(userID int, role string) (*string, error) {
 	claims := JwtClaims{
 		UserID: userID,
 		Role:   role,
