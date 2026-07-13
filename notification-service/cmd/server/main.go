@@ -7,12 +7,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	notificationv1 "github.com/Djarottosca/finalproject-ftgo-1/proto/notification/v1"
-
 	"github.com/Djarottosca/finalproject-ftgo-1/notification-service/internal/config"
 	"github.com/Djarottosca/finalproject-ftgo-1/notification-service/internal/grpcserver"
 	"github.com/Djarottosca/finalproject-ftgo-1/notification-service/internal/provider"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
+	notificationv1 "github.com/Djarottosca/finalproject-ftgo-1/proto/notification/v1"
 )
 
 func main() {

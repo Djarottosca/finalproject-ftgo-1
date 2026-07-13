@@ -5,9 +5,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	notificationv1 "github.com/Djarottosca/finalproject-ftgo-1/proto/notification/v1"
-
 	"github.com/Djarottosca/finalproject-ftgo-1/notification-service/internal/provider"
+	notificationv1 "github.com/Djarottosca/finalproject-ftgo-1/proto/notification/v1"
 )
 
 type Server struct {
