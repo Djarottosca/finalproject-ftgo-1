@@ -18,6 +18,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/database"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/user"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/jwt"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
 )
@@ -72,6 +73,11 @@ func (a *App) RunServer() {
 	authService := auth.NewService(authManager)
 	authHandler := auth.NewHandler(authService)
 	authHandler.RegisterRoutes(e)
+
+	userRepo := user.NewRepository(a.Database)
+	userService := user.NewService(userRepo)
+	userHandler := user.NewHandler(userService)
+	userHandler.RegisterRoutes(e)
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)
