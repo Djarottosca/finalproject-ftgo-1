@@ -75,28 +75,22 @@ func (s *Simulation) ParseWebhook(payload []byte, signature string) (WebhookEven
 	return WebhookEvent{}, errors.New("provider: simulasi tidak menerima webhook eksternal, pakai MarkPaid via /simulation/pay")
 }
 
-// MarkPaid nandain invoice jadi paid. Method ini DI LUAR interface PaymentProvider,
-// khusus simulasi, dipanggil HTTP handler /simulation/pay pas demo. Balikannya
-// WebhookEvent yang bentuknya sama persis kayak hasil webhook Xendit asli, jadi
-// grpcserver bisa nyalurinnya ke jalur "proses paid" yang sama.
-// Idempotent: kalau udah paid, tetap balikin event yang sama tanpa error.
-func (s *Simulation) MarkPaid(reference string) (WebhookEvent, error) {
+// MarkPaid nandain invoice jadi paid. DI LUAR interface PaymentProvider,
+// khusus simulasi, dipanggil lewat RPC SimulatePayment pas demo.
+// Idempotent: kalau udah paid, tetap balikin invoice yang sama tanpa error.
+func (s *Simulation) MarkPaid(reference string) (Invoice, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	rec, ok := s.store[reference]
 	if !ok {
-		return WebhookEvent{}, ErrInvoiceNotFound
+		return Invoice{}, ErrInvoiceNotFound
 	}
 
 	rec.invoice.Status = StatusPaid
 	s.store[reference] = rec
 
-	return WebhookEvent{
-		Reference: reference,
-		OrderID:   rec.orderID,
-		Status:    StatusPaid,
-	}, nil
+	return rec.invoice, nil
 }
 
 func newReference() string {
