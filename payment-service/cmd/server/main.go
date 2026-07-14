@@ -29,10 +29,11 @@ func main() {
 
 	// 2. provider (simulation / xendit)
 	prov, err := provider.New(provider.Config{
-		Name:                cfg.Provider.Name,
-		BaseURL:             cfg.App.BaseURL,
-		XenditAPIKey:        cfg.Xendit.APIKey,
-		XenditCallbackToken: cfg.Xendit.CallbackToken,
+		Name:            cfg.Provider.Name,
+		BaseURL:         cfg.App.BaseURL,
+		XenditAPIKey:    cfg.Xendit.APIKey,
+		XenditBaseURL:   cfg.Xendit.BaseURL,
+		XenditReturnURL: cfg.Xendit.ReturnURL,
 	})
 	if err != nil {
 		logger.Error("gagal inisialisasi provider", "err", err)
