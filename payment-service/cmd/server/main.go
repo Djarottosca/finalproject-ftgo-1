@@ -58,7 +58,6 @@ func main() {
 			logger.Error("gRPC server berhenti", "err", err)
 		}
 	}()
-
 	// 4. graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
