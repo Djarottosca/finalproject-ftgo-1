@@ -20,6 +20,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/address"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/order"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/productimage"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
@@ -108,6 +109,11 @@ func (a *App) RunServer() {
 	cartService := cart.NewService(cartRepo, productRepo)
 	cartHandler := cart.NewHandler(cartService)
 	cartHandler.RegisterRoutes(e, middleware.AuthMiddleware(authManager))
+
+	orderRepo := order.NewRepository(a.Database)
+	orderService := order.NewService(orderRepo, cartRepo, productRepo)
+	orderHandler := order.NewHandler(orderService, supplierRepo)
+	orderHandler.RegisterRoutes(e, middleware.AuthMiddleware(authManager))
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)
