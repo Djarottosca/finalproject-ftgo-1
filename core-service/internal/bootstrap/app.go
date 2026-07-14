@@ -19,6 +19,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/address"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/productimage"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
@@ -102,6 +103,11 @@ func (a *App) RunServer() {
 	addressService := address.NewService(addressRepo)
 	addressHandler := address.NewHandler(addressService)
 	addressHandler.RegisterRoutes(e, middleware.AuthMiddleware(authManager))
+
+	cartRepo := cart.NewRepository(a.Database)
+	cartService := cart.NewService(cartRepo, productRepo)
+	cartHandler := cart.NewHandler(cartService)
+	cartHandler.RegisterRoutes(e, middleware.AuthMiddleware(authManager))
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)
