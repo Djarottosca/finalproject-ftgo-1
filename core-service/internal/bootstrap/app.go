@@ -18,9 +18,12 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/database"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/user"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/jwt"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
+	"github.com/Djarottosca/finalproject-ftgo-1/pkg/validator"
 )
 
 type App struct {
@@ -64,6 +67,7 @@ func (a *App) RunServer() {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
+	e.Validator = validator.New()
 
 	e.Use(echoMiddleware.RequestID())
 	e.Use(echoMiddleware.Recover())
@@ -78,6 +82,20 @@ func (a *App) RunServer() {
 	userService := user.NewService(userRepo)
 	userHandler := user.NewHandler(userService)
 	userHandler.RegisterRoutes(e)
+
+	productRepo := product.NewRepository(a.Database)
+	productCache := product.NewRedisCache(a.Redis)
+	productService := product.NewService(productRepo, productCache)
+	productHandler := product.NewHandler(productService)
+	productHandler.RegisterRoutes(e)
+
+	// authGroup: semua route di bawah Authorization header
+	authGroup := e.Group("", middleware.AuthMiddleware(authManager))
+
+	cartRepo := cart.NewRepository(a.Database)
+	cartService := cart.NewService(cartRepo, productRepo)
+	cartHandler := cart.NewHandler(cartService)
+	cartHandler.RegisterRoutes(authGroup)
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)
