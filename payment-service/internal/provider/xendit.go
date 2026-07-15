@@ -103,7 +103,6 @@ var _ PaymentProvider = (*Xendit)(nil)
 // Implementasi PaymentProvider
 // ____________________________________________________________________________
 
-// CreateInvoice membuat payment session dan mengembalikan link checkout.
 //
 // Catatan penting: p.Amount adalah OTORITATIF. Total tidak pernah dihitung
 // ulang dari p.Items — perhitungan harga adalah tanggung jawab core-service.
