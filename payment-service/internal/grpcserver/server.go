@@ -19,11 +19,18 @@ import (
 type PaymentServer struct {
 	paymentv1.UnimplementedPaymentServiceServer
 	provider provider.PaymentProvider
+	sim      *provider.Simulation // non-nil cuma kalau provider aktif = simulasi
 	logger   *slog.Logger
 }
 
 func NewPaymentServer(p provider.PaymentProvider, logger *slog.Logger) *PaymentServer {
-	return &PaymentServer{provider: p, logger: logger}
+	s := &PaymentServer{provider: p, logger: logger}
+	// Type-assert sekali di sini. MarkPaid ada di LUAR interface PaymentProvider,
+	// jadi cuma kesimpen kalau provider-nya emang simulasi.
+	if sim, ok := p.(*provider.Simulation); ok {
+		s.sim = sim
+	}
+	return s
 }
 
 func (s *PaymentServer) CreatePayment(ctx context.Context, req *paymentv1.CreatePaymentRequest) (*paymentv1.CreatePaymentResponse, error) {
@@ -65,6 +72,34 @@ func (s *PaymentServer) GetPaymentStatus(ctx context.Context, req *paymentv1.Get
 	}
 
 	return &paymentv1.GetPaymentStatusResponse{
+		PaymentReference: inv.Reference,
+		OrderId:          inv.OrderID,
+		Status:           statusToProto(inv.Status),
+	}, nil
+}
+
+// SimulatePayment memaksa invoice jadi PAID tanpa Xendit. Cuma jalan kalau
+// provider aktif adalah simulasi — di produksi (Xendit) dia nolak.
+func (s *PaymentServer) SimulatePayment(ctx context.Context, req *paymentv1.SimulatePaymentRequest) (*paymentv1.SimulatePaymentResponse, error) {
+	if s.sim == nil {
+		return nil, status.Error(codes.FailedPrecondition, "simulasi tidak aktif: provider saat ini bukan simulation")
+	}
+
+	inv, err := s.sim.MarkPaid(req.GetPaymentReference())
+	if err != nil {
+		if errors.Is(err, provider.ErrInvoiceNotFound) {
+			return nil, status.Error(codes.NotFound, "invoice tidak ditemukan")
+		}
+		s.logger.Error("gagal simulasi pembayaran", "reference", req.GetPaymentReference(), "err", err)
+		return nil, status.Error(codes.Internal, "gagal simulasi pembayaran")
+	}
+
+	s.logger.Info("pembayaran disimulasikan",
+		"order_id", inv.OrderID,
+		"reference", inv.Reference,
+	)
+
+	return &paymentv1.SimulatePaymentResponse{
 		PaymentReference: inv.Reference,
 		OrderId:          inv.OrderID,
 		Status:           statusToProto(inv.Status),

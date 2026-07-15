@@ -25,8 +25,9 @@ type ProviderConfig struct {
 }
 
 type XenditConfig struct {
-	APIKey        string
-	CallbackToken string
+	APIKey    string
+	BaseURL   string // default https://api.xendit.co
+	ReturnURL string // halaman core tempat user dibalikin abis bayar
 }
 
 func Load() (*Config, error) {
@@ -46,6 +47,8 @@ func Load() (*Config, error) {
 	v.SetDefault("PAYMENT_HTTP_PORT", 9002)
 	v.SetDefault("PAYMENT_BASE_URL", "http://localhost:9002")
 	v.SetDefault("PAYMENT_PROVIDER", "simulation")
+	v.SetDefault("XENDIT_BASE_URL", "https://api.xendit.co")
+	v.SetDefault("XENDIT_RETURN_URL", "http://localhost:8080/orders")
 
 	cfg := &Config{
 		App: AppConfig{
@@ -59,8 +62,9 @@ func Load() (*Config, error) {
 			Name: v.GetString("PAYMENT_PROVIDER"),
 		},
 		Xendit: XenditConfig{
-			APIKey:        v.GetString("XENDIT_API_KEY"),
-			CallbackToken: v.GetString("XENDIT_CALLBACK_TOKEN"),
+			APIKey:    v.GetString("XENDIT_API_KEY"),
+			BaseURL:   v.GetString("XENDIT_BASE_URL"),
+			ReturnURL: v.GetString("XENDIT_RETURN_URL"),
 		},
 	}
 
