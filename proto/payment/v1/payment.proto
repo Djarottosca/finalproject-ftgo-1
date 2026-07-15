@@ -7,13 +7,19 @@ option go_package = "github.com/Djarottosca/finalproject-ftgo-1/proto/payment/v1
 import "google/protobuf/timestamp.proto";
 
 // Di-implement oleh payment-service, dipanggil oleh core-service.
-// Method callback "sudah paid" TIDAK di sini, itu kontrak milik core.
+// Semua komunikasi lewat gRPC — payment-service tidak punya HTTP server.
+// Sinyal "paid" ditemukan lewat polling GetPaymentStatus dari core (job Asynq),
+// bukan lewat webhook.
 service PaymentService {
-  // Dipanggil core pas checkout: bikin invoice ke provider, balikin link bayar.
+  // Dipanggil core pas checkout: bikin payment session, balikin link bayar.
   rpc CreatePayment(CreatePaymentRequest) returns (CreatePaymentResponse);
 
-  // Fallback kalau webhook Xendit kelewat: core nanya status terkini by reference.
+  // Di-poll core sampai status berubah jadi PAID/EXPIRED/FAILED.
   rpc GetPaymentStatus(GetPaymentStatusRequest) returns (GetPaymentStatusResponse);
+
+  // Khusus provider simulasi: memaksa pembayaran jadi PAID tanpa Xendit.
+  // Balikin FAILED_PRECONDITION kalau provider aktif bukan simulasi.
+  rpc SimulatePayment(SimulatePaymentRequest) returns (SimulatePaymentResponse);
 }
 
 enum PaymentStatus {
@@ -25,27 +31,27 @@ enum PaymentStatus {
 }
 
 message CreatePaymentRequest {
-  int64 order_id = 1;         // dipakai sebagai external_id ke Xendit → korelasi webhook tanpa DB
+  int64 order_id = 1;         // dikirim sebagai reference_id ke Xendit
   int64 user_id = 2;
   string customer_name = 3;
-  string customer_email = 4;  // tujuan email invoice dari Xendit
+  string customer_email = 4;
   int64 amount = 5;           // OTORITATIF. Rupiah utuh, integer, bukan float.
   string description = 6;
-  repeated PaymentItem items = 7;   // opsional, display-only, diteruskan apa adanya ke Xendit
-  string idempotency_key = 8;       // opsional, hardening kalau race di core kebobolan
+  repeated PaymentItem items = 7;   // opsional, display-only
+  string idempotency_key = 8;       // opsional
 }
 
 message PaymentItem {
   string name = 1;
   int32 quantity = 2;
-  int64 price = 3;            // rupiah utuh per item
+  int64 price = 3;
 }
 
 message CreatePaymentResponse {
-  string payment_reference = 1;   // invoice id dari provider (mis. Xendit invoice id)
-  string payment_link = 2;        // URL redirect user buat bayar
-  PaymentStatus status = 3;       // umumnya PENDING pas baru dibuat
-  google.protobuf.Timestamp expires_at = 4;
+  string payment_reference = 1;   // payment_session_id dari Xendit
+  string payment_link = 2;        // payment_link_url dari Xendit
+  PaymentStatus status = 3;       // PENDING pas baru dibuat
+  google.protobuf.Timestamp expires_at = 4;  // session Xendit umurnya pendek (default 30 menit)
 }
 
 message GetPaymentStatusRequest {
@@ -56,4 +62,14 @@ message GetPaymentStatusResponse {
   string payment_reference = 1;
   int64 order_id = 2;
   PaymentStatus status = 3;
+}
+
+message SimulatePaymentRequest {
+  string payment_reference = 1;
+}
+
+message SimulatePaymentResponse {
+  string payment_reference = 1;
+  int64 order_id = 2;
+  PaymentStatus status = 3;   // PAID kalau sukses
 }
