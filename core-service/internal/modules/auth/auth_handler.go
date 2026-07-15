@@ -17,10 +17,6 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) RegisterRoutes(e *echo.Echo) {
-	e.POST("/auth/login", h.Login)
-}
-
 func (h *Handler) Login(c echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {

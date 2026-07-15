@@ -18,15 +18,6 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) RegisterRoutes(e *echo.Echo) {
-	g := e.Group("/users")
-	g.POST("", h.Create)
-	g.GET("", h.List)
-	g.GET("/:id", h.Get)
-	g.PUT("/:id", h.Update)
-	g.DELETE("/:id", h.Delete)
-}
-
 func (h *Handler) Create(c echo.Context) error {
 	var req CreateUserRequest
 	if err := c.Bind(&req); err != nil {

@@ -48,8 +48,8 @@ func (s *PaymentServer) CreatePayment(ctx context.Context, req *paymentv1.Create
 
 	inv, err := s.provider.CreateInvoice(ctx, params)
 	if err != nil {
-		s.logger.Error("gagal bikin invoice", "order_id", req.GetOrderId(), "err", err)
-		return nil, status.Error(codes.Internal, "gagal membuat pembayaran")
+		s.logger.Error("failed to create payment", "order_id", req.GetOrderId(), "err", err)
+		return nil, status.Error(codes.Internal, "failed to create payment")
 	}
 
 	// provider -> proto
@@ -65,10 +65,10 @@ func (s *PaymentServer) GetPaymentStatus(ctx context.Context, req *paymentv1.Get
 	inv, err := s.provider.GetInvoice(ctx, req.GetPaymentReference())
 	if err != nil {
 		if errors.Is(err, provider.ErrInvoiceNotFound) {
-			return nil, status.Error(codes.NotFound, "invoice tidak ditemukan")
+			return nil, status.Error(codes.NotFound, "invoice not found")
 		}
-		s.logger.Error("gagal ambil status invoice", "reference", req.GetPaymentReference(), "err", err)
-		return nil, status.Error(codes.Internal, "gagal mengambil status pembayaran")
+		s.logger.Error("failed to get payment status", "reference", req.GetPaymentReference(), "err", err)
+		return nil, status.Error(codes.Internal, "failed to get payment status")
 	}
 
 	return &paymentv1.GetPaymentStatusResponse{
@@ -78,23 +78,24 @@ func (s *PaymentServer) GetPaymentStatus(ctx context.Context, req *paymentv1.Get
 	}, nil
 }
 
-// SimulatePayment memaksa invoice jadi PAID tanpa Xendit. Cuma jalan kalau
-// provider aktif adalah simulasi — di produksi (Xendit) dia nolak.
+// SimulatePayment forces an invoice into PAID without going through Xendit.
+// It only works when the active provider is the simulation; in production
+// (Xendit) it is rejected.
 func (s *PaymentServer) SimulatePayment(ctx context.Context, req *paymentv1.SimulatePaymentRequest) (*paymentv1.SimulatePaymentResponse, error) {
 	if s.sim == nil {
-		return nil, status.Error(codes.FailedPrecondition, "simulasi tidak aktif: provider saat ini bukan simulation")
+		return nil, status.Error(codes.FailedPrecondition, "simulation is not active: current provider is not simulation")
 	}
 
 	inv, err := s.sim.MarkPaid(req.GetPaymentReference())
 	if err != nil {
 		if errors.Is(err, provider.ErrInvoiceNotFound) {
-			return nil, status.Error(codes.NotFound, "invoice tidak ditemukan")
+			return nil, status.Error(codes.NotFound, "invoice not found")
 		}
-		s.logger.Error("gagal simulasi pembayaran", "reference", req.GetPaymentReference(), "err", err)
-		return nil, status.Error(codes.Internal, "gagal simulasi pembayaran")
+		s.logger.Error("failed to simulate payment", "reference", req.GetPaymentReference(), "err", err)
+		return nil, status.Error(codes.Internal, "failed to simulate payment")
 	}
 
-	s.logger.Info("pembayaran disimulasikan",
+	s.logger.Info("payment simulated",
 		"order_id", inv.OrderID,
 		"reference", inv.Reference,
 	)

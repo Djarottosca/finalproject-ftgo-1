@@ -23,23 +23,27 @@ func main() {
 	// 1. config
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("gagal load config", "err", err)
+		logger.Error("failed to load config", "err", err)
 		os.Exit(1)
 	}
 
 	// 2. provider (simulation / xendit)
 	prov, err := provider.New(provider.Config{
-		Name:            cfg.Provider.Name,
-		BaseURL:         cfg.App.BaseURL,
-		XenditAPIKey:    cfg.Xendit.APIKey,
-		XenditBaseURL:   cfg.Xendit.BaseURL,
-		XenditReturnURL: cfg.Xendit.ReturnURL,
+		Name:              cfg.Provider.Name,
+		BaseURL:           cfg.App.BaseURL,
+		InvoiceTTL:        cfg.Provider.InvoiceTTL,
+		XenditAPIKey:      cfg.Xendit.APIKey,
+		XenditBaseURL:     cfg.Xendit.BaseURL,
+		XenditReturnURL:   cfg.Xendit.ReturnURL,
+		XenditHTTPTimeout: cfg.Xendit.HTTPTimeout,
+		XenditCurrency:    cfg.Xendit.Currency,
+		XenditCountry:     cfg.Xendit.Country,
 	})
 	if err != nil {
-		logger.Error("gagal inisialisasi provider", "err", err)
+		logger.Error("failed to initialize payment provider", "err", err)
 		os.Exit(1)
 	}
-	logger.Info("provider aktif", "name", cfg.Provider.Name)
+	logger.Info("payment provider initialized", "provider", cfg.Provider.Name)
 
 	// 3. gRPC server — satu-satunya pintu masuk payment-service
 	grpcServer := grpc.NewServer()
@@ -49,21 +53,22 @@ func main() {
 	addr := net.JoinHostPort(cfg.App.Host, strconv.Itoa(cfg.App.GRPCPort))
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		logger.Error("gagal listen gRPC", "addr", addr, "err", err)
+		logger.Error("failed to listen on gRPC port", "addr", addr, "err", err)
 		os.Exit(1)
 	}
 	go func() {
-		logger.Info("gRPC server jalan", "addr", addr)
+		logger.Info("gRPC server listening", "addr", addr)
 		if err := grpcServer.Serve(lis); err != nil {
-			logger.Error("gRPC server berhenti", "err", err)
+			logger.Error("gRPC server stopped unexpectedly", "err", err)
 		}
 	}()
+
 	// 4. graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	logger.Info("shutdown diminta, membersihkan")
+	logger.Info("shutdown signal received, shutting down gracefully")
 
 	grpcServer.GracefulStop()
-	logger.Info("payment-service berhenti dengan bersih")
+	logger.Info("payment-service stopped gracefully")
 }

@@ -1,25 +1,36 @@
 package provider
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
-// Config: cuma yang provider butuh. Sengaja kecil biar package provider
-// gak kenal Viper / config aplikasi. main.go yang mapping dari app config ke sini.
 type Config struct {
-	Name            string
-	BaseURL         string
-	XenditAPIKey    string
-	XenditBaseURL   string // default https://api.xendit.co
-	XenditReturnURL string // halaman core tempat user dibalikin abis bayar
+	Name       string
+	BaseURL    string
+	InvoiceTTL time.Duration
+
+	XenditAPIKey      string
+	XenditBaseURL     string
+	XenditReturnURL   string
+	XenditHTTPTimeout time.Duration
+	XenditCurrency    string
+	XenditCountry     string
 }
 
-// New milih implementasi berdasar cfg.Name. Balikannya interface, jadi
-// pemanggil (main) gak kenal tipe konkret.
 func New(cfg Config) (PaymentProvider, error) {
 	switch cfg.Name {
 	case "simulation":
-		return NewSimulation(cfg.BaseURL), nil
+		return NewSimulation(cfg.BaseURL, cfg.InvoiceTTL), nil
 	case "xendit":
-		return NewXendit(cfg.XenditAPIKey, cfg.XenditBaseURL, cfg.XenditReturnURL), nil
+		return NewXendit(XenditOptions{
+			APIKey:      cfg.XenditAPIKey,
+			BaseURL:     cfg.XenditBaseURL,
+			ReturnURL:   cfg.XenditReturnURL,
+			HTTPTimeout: cfg.XenditHTTPTimeout,
+			Currency:    cfg.XenditCurrency,
+			Country:     cfg.XenditCountry,
+		}), nil
 	default:
 		return nil, fmt.Errorf("provider: nama provider tidak dikenal: %q", cfg.Name)
 	}
