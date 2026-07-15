@@ -18,6 +18,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/database"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/address"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/admin"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/order"
@@ -74,6 +75,10 @@ func (a *App) RunServer() {
 	e.Use(echoMiddleware.RequestID())
 	e.Use(echoMiddleware.Recover())
 	e.Use(middleware.RequestLoggerMiddleware())
+
+	adminRepo := admin.NewRepository(a.Database)
+	adminService := admin.NewService(adminRepo)
+	adminHandler := admin.NewHandler(adminService)
 
 	authManager := jwt.NewAuthManager(a.Config.JWTSecret)
 	authMW := middleware.AuthMiddleware(authManager)
@@ -160,6 +165,7 @@ func (a *App) RunServer() {
 	v1.GET("/admin/products/:id/images", productImageHandler.List, authMW, adminMW)
 	v1.GET("/admin/suppliers", supplierHandler.List, authMW, adminMW)
 	v1.PATCH("/admin/suppliers/:id/review", supplierHandler.Review, authMW, adminMW)
+	v1.GET("/admin/reports/stock", adminHandler.StockReport, authMW, adminMW)
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)
