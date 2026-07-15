@@ -7,7 +7,6 @@ import (
 
 	echo "github.com/labstack/echo/v4"
 
-	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/response"
 )
@@ -21,17 +20,6 @@ type Handler struct {
 // ID from user ID, since JWT only carries user_id/role.
 func NewHandler(service Service, supplierRepo supplier.Repository) *Handler {
 	return &Handler{service: service, supplierRepo: supplierRepo}
-}
-
-// RegisterRoutes wires product image routes. authMW authenticates the
-// request; write endpoints are additionally restricted to the supplier
-// role, and ownership is checked in the service layer.
-func (h *Handler) RegisterRoutes(e *echo.Echo, authMW echo.MiddlewareFunc) {
-	e.GET("/products/:id/images", h.List)
-
-	g := e.Group("/products/:id/images", authMW, middleware.RequireRole("supplier"))
-	g.POST("", h.Add)
-	e.DELETE("/product-images/:imageId", h.Delete, authMW, middleware.RequireRole("supplier"))
 }
 
 func (h *Handler) Add(c echo.Context) error {

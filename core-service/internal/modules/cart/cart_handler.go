@@ -18,16 +18,6 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
-// RegisterRoutes wires cart routes. authMW authenticates the request;
-// the cart is always scoped to the caller's own user_id.
-func (h *Handler) RegisterRoutes(e *echo.Echo, authMW echo.MiddlewareFunc) {
-	g := e.Group("/cart", authMW)
-	g.POST("", h.Add)
-	g.GET("", h.List)
-	g.PUT("/:productId", h.Update)
-	g.DELETE("/:productId", h.Delete)
-}
-
 func (h *Handler) Add(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
 

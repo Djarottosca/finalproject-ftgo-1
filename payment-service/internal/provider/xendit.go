@@ -40,23 +40,23 @@ var _ PaymentProvider = (*Xendit)(nil)
 // --- bentuk payload Xendit (cuma field yang kita butuh) ---
 
 type xenditSessionRequest struct {
-	ReferenceID     string              `json:"reference_id"`
-	SessionType     string              `json:"session_type"` // "PAY"
-	Mode            string              `json:"mode"`         // "PAYMENT_LINK"
-	Amount          int64               `json:"amount"`
-	Currency        string              `json:"currency"` // "IDR"
-	Country         string              `json:"country"`  // "ID"
-	Customer        xenditCustomer      `json:"customer"`
-	Items           []xenditItem        `json:"items,omitempty"`
-	SuccessReturnURL string             `json:"success_return_url,omitempty"`
-	CancelReturnURL  string             `json:"cancel_return_url,omitempty"`
+	ReferenceID      string         `json:"reference_id"`
+	SessionType      string         `json:"session_type"` // "PAY"
+	Mode             string         `json:"mode"`         // "PAYMENT_LINK"
+	Amount           int64          `json:"amount"`
+	Currency         string         `json:"currency"` // "IDR"
+	Country          string         `json:"country"`  // "ID"
+	Customer         xenditCustomer `json:"customer"`
+	Items            []xenditItem   `json:"items,omitempty"`
+	SuccessReturnURL string         `json:"success_return_url,omitempty"`
+	CancelReturnURL  string         `json:"cancel_return_url,omitempty"`
 }
 
 type xenditCustomer struct {
-	ReferenceID      string                   `json:"reference_id"`
-	Type             string                   `json:"type"` // "INDIVIDUAL"
-	Email            string                   `json:"email"`
-	IndividualDetail xenditIndividualDetail   `json:"individual_detail"`
+	ReferenceID      string                 `json:"reference_id"`
+	Type             string                 `json:"type"` // "INDIVIDUAL"
+	Email            string                 `json:"email"`
+	IndividualDetail xenditIndividualDetail `json:"individual_detail"`
 }
 
 type xenditIndividualDetail struct {

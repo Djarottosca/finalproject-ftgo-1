@@ -7,7 +7,6 @@ import (
 
 	echo "github.com/labstack/echo/v4"
 
-	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/response"
 )
@@ -21,21 +20,6 @@ type Handler struct {
 // ID from their user ID, since the JWT only carries user_id/role.
 func NewHandler(service Service, supplierRepo supplier.Repository) *Handler {
 	return &Handler{service: service, supplierRepo: supplierRepo}
-}
-
-// RegisterRoutes wires product routes. authMW authenticates the request;
-// write endpoints are additionally restricted to the supplier role and
-// ownership-checked in the service layer.
-func (h *Handler) RegisterRoutes(e *echo.Echo, authMW echo.MiddlewareFunc) {
-	e.GET("/products", h.List)
-	e.GET("/products/:id", h.Get)
-
-	g := e.Group("/products", authMW, middleware.RequireRole("supplier"))
-	g.POST("", h.Create)
-	g.PUT("/:id", h.Update)
-	g.PATCH("/:id/discount", h.SetDiscount)
-	g.PATCH("/:id/stock", h.AdjustStock)
-	g.DELETE("/:id", h.Delete)
 }
 
 func (h *Handler) Create(c echo.Context) error {
@@ -87,6 +71,49 @@ func (h *Handler) List(c echo.Context) error {
 	res, err := h.service.List(filter)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list products")
+	}
+
+	return response.SuccessResponse(c, http.StatusOK, "ok", res)
+}
+
+// ListMine lists only the caller's own products, for the supplier dashboard.
+func (h *Handler) ListMine(c echo.Context) error {
+	userID, _ := c.Get("user_id").(int)
+	sup, err := h.supplierRepo.FindByUserID(userID)
+	if err != nil {
+		return response.ErrorResponse(c, http.StatusForbidden, "you must be a registered supplier to perform this action")
+	}
+
+	res, err := h.service.List(ListFilter{SupplierID: sup.ID})
+	if err != nil {
+		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list products")
+	}
+
+	return response.SuccessResponse(c, http.StatusOK, "ok", res)
+}
+
+// GetMine gets a single product, but only if it belongs to the caller.
+func (h *Handler) GetMine(c echo.Context) error {
+	userID, _ := c.Get("user_id").(int)
+	sup, err := h.supplierRepo.FindByUserID(userID)
+	if err != nil {
+		return response.ErrorResponse(c, http.StatusForbidden, "you must be a registered supplier to perform this action")
+	}
+
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return response.ErrorResponse(c, http.StatusBadRequest, "invalid id")
+	}
+
+	res, err := h.service.Get(id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return response.ErrorResponse(c, http.StatusNotFound, err.Error())
+		}
+		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to get product")
+	}
+	if res.SupplierID != sup.ID {
+		return response.ErrorResponse(c, http.StatusForbidden, "product does not belong to this supplier")
 	}
 
 	return response.SuccessResponse(c, http.StatusOK, "ok", res)

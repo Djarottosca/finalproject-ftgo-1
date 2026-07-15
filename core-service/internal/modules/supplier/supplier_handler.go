@@ -7,7 +7,6 @@ import (
 
 	echo "github.com/labstack/echo/v4"
 
-	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/response"
 )
 
@@ -17,16 +16,6 @@ type Handler struct {
 
 func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
-}
-
-// RegisterRoutes wires supplier routes. authMW authenticates the request;
-// review/list are additionally restricted to the admin role.
-func (h *Handler) RegisterRoutes(e *echo.Echo, authMW echo.MiddlewareFunc) {
-	g := e.Group("/suppliers", authMW)
-	g.POST("", h.Register)
-	g.GET("/:id", h.Get)
-	g.GET("", h.List, middleware.RequireRole("admin"))
-	g.PATCH("/:id/review", h.Review, middleware.RequireRole("admin"))
 }
 
 func (h *Handler) Register(c echo.Context) error {
