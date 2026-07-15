@@ -7,8 +7,11 @@ import (
 )
 
 type Config struct {
-	App     AppConfig
-	Mailjet MailjetConfig
+	App       AppConfig
+	Mailjet   MailjetConfig
+	AppScript AppScriptConfig
+	// EmailProvider mailjet or appscript
+	EmailProvider string
 }
 
 type AppConfig struct {
@@ -22,6 +25,12 @@ type MailjetConfig struct {
 	APISecret   string
 	SenderEmail string
 	SenderName  string
+}
+
+// AppScriptConfig
+type AppScriptConfig struct {
+	WebAppURL string
+	Secret    string
 }
 
 func Load() (*Config, error) {
@@ -38,6 +47,7 @@ func Load() (*Config, error) {
 	v.SetDefault("NOTIFICATION_ENV", "development")
 	v.SetDefault("NOTIFICATION_HOST", "0.0.0.0")
 	v.SetDefault("NOTIFICATION_PORT", 9002)
+	v.SetDefault("EMAIL_PROVIDER", "mailjet")
 
 	cfg := &Config{
 		App: AppConfig{
@@ -51,6 +61,11 @@ func Load() (*Config, error) {
 			SenderEmail: v.GetString("MAILJET_SENDER_EMAIL"),
 			SenderName:  v.GetString("MAILJET_SENDER_NAME"),
 		},
+		AppScript: AppScriptConfig{
+			WebAppURL: v.GetString("APPSCRIPT_WEBAPP_URL"),
+			Secret:    v.GetString("APPSCRIPT_SECRET"),
+		},
+		EmailProvider: v.GetString("EMAIL_PROVIDER"),
 	}
 
 	return cfg, nil

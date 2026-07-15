@@ -7,11 +7,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	notificationv1 "github.com/Djarottosca/finalproject-ftgo-1/proto/notification/v1"
+
 	"github.com/Djarottosca/finalproject-ftgo-1/notification-service/internal/config"
 	"github.com/Djarottosca/finalproject-ftgo-1/notification-service/internal/grpcserver"
 	"github.com/Djarottosca/finalproject-ftgo-1/notification-service/internal/provider"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
-	notificationv1 "github.com/Djarottosca/finalproject-ftgo-1/proto/notification/v1"
 )
 
 func main() {
@@ -22,13 +23,24 @@ func main() {
 		logger.Log.Fatal().Err(err).Msg("failed to load config")
 	}
 
-	mailjetProvider := provider.NewMailjetProvider(cfg.Mailjet)
+	var emailSender provider.EmailSender
+	switch cfg.EmailProvider {
+	case "appscript":
+		emailSender = provider.NewAppScriptProvider(cfg.AppScript.WebAppURL, cfg.AppScript.Secret)
+		logger.Log.Info().Msg("EMAIL_PROVIDER=appscript — kirim email lewat Google Apps Script")
+	case "mailjet":
+		emailSender = provider.NewMailjetProvider(cfg.Mailjet)
+	default:
+		logger.Log.Fatal().Str("email_provider", cfg.EmailProvider).Msg("EMAIL_PROVIDER tidak dikenali, pakai 'mailjet' atau 'appscript'")
+	}
 
-	notifServer := grpcserver.NewServer(mailjetProvider, logger.Log)
+	notifServer := grpcserver.NewServer(emailSender, logger.Log)
 
 	grpcServer := grpc.NewServer()
 	notificationv1.RegisterNotificationServiceServer(grpcServer, notifServer)
 
+	// Reflection diaktifkan supaya bisa dites via Postman / grpcurl tanpa
+	// perlu import file .proto manual di client.
 	reflection.Register(grpcServer)
 
 	addr := fmt.Sprintf("%s:%d", cfg.App.Host, cfg.App.Port)
