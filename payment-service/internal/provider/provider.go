@@ -50,8 +50,9 @@ type WebhookEvent struct {
 }
 
 // Satu-satunya kontak ke dunia pembayaran (Xendit / simulasi).
+// Tidak ada ParseWebhook: payment-service murni gRPC, sinyal paid ditemukan
+// lewat polling GetInvoice dari core, bukan webhook.
 type PaymentProvider interface {
 	CreateInvoice(ctx context.Context, p CreateInvoiceParams) (Invoice, error)
 	GetInvoice(ctx context.Context, reference string) (Invoice, error)
-	ParseWebhook(payload []byte, signature string) (WebhookEvent, error)
 }

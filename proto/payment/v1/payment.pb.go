@@ -79,14 +79,14 @@ func (PaymentStatus) EnumDescriptor() ([]byte, []int) {
 
 type CreatePaymentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	OrderId        int64                  `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // dipakai sebagai external_id ke Xendit → korelasi webhook tanpa DB
+	OrderId        int64                  `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"` // dikirim sebagai reference_id ke Xendit
 	UserId         int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	CustomerName   string                 `protobuf:"bytes,3,opt,name=customer_name,json=customerName,proto3" json:"customer_name,omitempty"`
-	CustomerEmail  string                 `protobuf:"bytes,4,opt,name=customer_email,json=customerEmail,proto3" json:"customer_email,omitempty"` // tujuan email invoice dari Xendit
-	Amount         int64                  `protobuf:"varint,5,opt,name=amount,proto3" json:"amount,omitempty"`                                   // OTORITATIF. Rupiah utuh, integer, bukan float.
+	CustomerEmail  string                 `protobuf:"bytes,4,opt,name=customer_email,json=customerEmail,proto3" json:"customer_email,omitempty"`
+	Amount         int64                  `protobuf:"varint,5,opt,name=amount,proto3" json:"amount,omitempty"` // OTORITATIF. Rupiah utuh, integer, bukan float.
 	Description    string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
-	Items          []*PaymentItem         `protobuf:"bytes,7,rep,name=items,proto3" json:"items,omitempty"`                                         // opsional, display-only, diteruskan apa adanya ke Xendit
-	IdempotencyKey string                 `protobuf:"bytes,8,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"` // opsional, hardening kalau race di core kebobolan
+	Items          []*PaymentItem         `protobuf:"bytes,7,rep,name=items,proto3" json:"items,omitempty"`                                         // opsional, display-only
+	IdempotencyKey string                 `protobuf:"bytes,8,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"` // opsional
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -181,7 +181,7 @@ type PaymentItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Quantity      int32                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	Price         int64                  `protobuf:"varint,3,opt,name=price,proto3" json:"price,omitempty"` // rupiah utuh per item
+	Price         int64                  `protobuf:"varint,3,opt,name=price,proto3" json:"price,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -239,10 +239,10 @@ func (x *PaymentItem) GetPrice() int64 {
 
 type CreatePaymentResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	PaymentReference string                 `protobuf:"bytes,1,opt,name=payment_reference,json=paymentReference,proto3" json:"payment_reference,omitempty"` // invoice id dari provider (mis. Xendit invoice id)
-	PaymentLink      string                 `protobuf:"bytes,2,opt,name=payment_link,json=paymentLink,proto3" json:"payment_link,omitempty"`                // URL redirect user buat bayar
-	Status           PaymentStatus          `protobuf:"varint,3,opt,name=status,proto3,enum=payment.v1.PaymentStatus" json:"status,omitempty"`              // umumnya PENDING pas baru dibuat
-	ExpiresAt        *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	PaymentReference string                 `protobuf:"bytes,1,opt,name=payment_reference,json=paymentReference,proto3" json:"payment_reference,omitempty"` // payment_session_id dari Xendit
+	PaymentLink      string                 `protobuf:"bytes,2,opt,name=payment_link,json=paymentLink,proto3" json:"payment_link,omitempty"`                // payment_link_url dari Xendit
+	Status           PaymentStatus          `protobuf:"varint,3,opt,name=status,proto3,enum=payment.v1.PaymentStatus" json:"status,omitempty"`              // PENDING pas baru dibuat
+	ExpiresAt        *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                      // session Xendit umurnya pendek (default 30 menit)
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -409,6 +409,110 @@ func (x *GetPaymentStatusResponse) GetStatus() PaymentStatus {
 	return PaymentStatus_PAYMENT_STATUS_UNSPECIFIED
 }
 
+type SimulatePaymentRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	PaymentReference string                 `protobuf:"bytes,1,opt,name=payment_reference,json=paymentReference,proto3" json:"payment_reference,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SimulatePaymentRequest) Reset() {
+	*x = SimulatePaymentRequest{}
+	mi := &file_payment_v1_payment_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SimulatePaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SimulatePaymentRequest) ProtoMessage() {}
+
+func (x *SimulatePaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_payment_v1_payment_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SimulatePaymentRequest.ProtoReflect.Descriptor instead.
+func (*SimulatePaymentRequest) Descriptor() ([]byte, []int) {
+	return file_payment_v1_payment_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SimulatePaymentRequest) GetPaymentReference() string {
+	if x != nil {
+		return x.PaymentReference
+	}
+	return ""
+}
+
+type SimulatePaymentResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	PaymentReference string                 `protobuf:"bytes,1,opt,name=payment_reference,json=paymentReference,proto3" json:"payment_reference,omitempty"`
+	OrderId          int64                  `protobuf:"varint,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Status           PaymentStatus          `protobuf:"varint,3,opt,name=status,proto3,enum=payment.v1.PaymentStatus" json:"status,omitempty"` // PAID kalau sukses
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SimulatePaymentResponse) Reset() {
+	*x = SimulatePaymentResponse{}
+	mi := &file_payment_v1_payment_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SimulatePaymentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SimulatePaymentResponse) ProtoMessage() {}
+
+func (x *SimulatePaymentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_payment_v1_payment_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SimulatePaymentResponse.ProtoReflect.Descriptor instead.
+func (*SimulatePaymentResponse) Descriptor() ([]byte, []int) {
+	return file_payment_v1_payment_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SimulatePaymentResponse) GetPaymentReference() string {
+	if x != nil {
+		return x.PaymentReference
+	}
+	return ""
+}
+
+func (x *SimulatePaymentResponse) GetOrderId() int64 {
+	if x != nil {
+		return x.OrderId
+	}
+	return 0
+}
+
+func (x *SimulatePaymentResponse) GetStatus() PaymentStatus {
+	if x != nil {
+		return x.Status
+	}
+	return PaymentStatus_PAYMENT_STATUS_UNSPECIFIED
+}
+
 var File_payment_v1_payment_proto protoreflect.FileDescriptor
 
 const file_payment_v1_payment_proto_rawDesc = "" +
@@ -439,16 +543,23 @@ const file_payment_v1_payment_proto_rawDesc = "" +
 	"\x18GetPaymentStatusResponse\x12+\n" +
 	"\x11payment_reference\x18\x01 \x01(\tR\x10paymentReference\x12\x19\n" +
 	"\border_id\x18\x02 \x01(\x03R\aorderId\x121\n" +
+	"\x06status\x18\x03 \x01(\x0e2\x19.payment.v1.PaymentStatusR\x06status\"E\n" +
+	"\x16SimulatePaymentRequest\x12+\n" +
+	"\x11payment_reference\x18\x01 \x01(\tR\x10paymentReference\"\x94\x01\n" +
+	"\x17SimulatePaymentResponse\x12+\n" +
+	"\x11payment_reference\x18\x01 \x01(\tR\x10paymentReference\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\x03R\aorderId\x121\n" +
 	"\x06status\x18\x03 \x01(\x0e2\x19.payment.v1.PaymentStatusR\x06status*\x9b\x01\n" +
 	"\rPaymentStatus\x12\x1e\n" +
 	"\x1aPAYMENT_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PAYMENT_STATUS_PENDING\x10\x01\x12\x17\n" +
 	"\x13PAYMENT_STATUS_PAID\x10\x02\x12\x1a\n" +
 	"\x16PAYMENT_STATUS_EXPIRED\x10\x03\x12\x19\n" +
-	"\x15PAYMENT_STATUS_FAILED\x10\x042\xc5\x01\n" +
+	"\x15PAYMENT_STATUS_FAILED\x10\x042\xa1\x02\n" +
 	"\x0ePaymentService\x12T\n" +
 	"\rCreatePayment\x12 .payment.v1.CreatePaymentRequest\x1a!.payment.v1.CreatePaymentResponse\x12]\n" +
-	"\x10GetPaymentStatus\x12#.payment.v1.GetPaymentStatusRequest\x1a$.payment.v1.GetPaymentStatusResponseBGZEgithub.com/Djarottosca/finalproject-ftgo-1/proto/payment/v1;paymentv1b\x06proto3"
+	"\x10GetPaymentStatus\x12#.payment.v1.GetPaymentStatusRequest\x1a$.payment.v1.GetPaymentStatusResponse\x12Z\n" +
+	"\x0fSimulatePayment\x12\".payment.v1.SimulatePaymentRequest\x1a#.payment.v1.SimulatePaymentResponseBGZEgithub.com/Djarottosca/finalproject-ftgo-1/proto/payment/v1;paymentv1b\x06proto3"
 
 var (
 	file_payment_v1_payment_proto_rawDescOnce sync.Once
@@ -463,7 +574,7 @@ func file_payment_v1_payment_proto_rawDescGZIP() []byte {
 }
 
 var file_payment_v1_payment_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_payment_v1_payment_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_payment_v1_payment_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_payment_v1_payment_proto_goTypes = []any{
 	(PaymentStatus)(0),               // 0: payment.v1.PaymentStatus
 	(*CreatePaymentRequest)(nil),     // 1: payment.v1.CreatePaymentRequest
@@ -471,22 +582,27 @@ var file_payment_v1_payment_proto_goTypes = []any{
 	(*CreatePaymentResponse)(nil),    // 3: payment.v1.CreatePaymentResponse
 	(*GetPaymentStatusRequest)(nil),  // 4: payment.v1.GetPaymentStatusRequest
 	(*GetPaymentStatusResponse)(nil), // 5: payment.v1.GetPaymentStatusResponse
-	(*timestamppb.Timestamp)(nil),    // 6: google.protobuf.Timestamp
+	(*SimulatePaymentRequest)(nil),   // 6: payment.v1.SimulatePaymentRequest
+	(*SimulatePaymentResponse)(nil),  // 7: payment.v1.SimulatePaymentResponse
+	(*timestamppb.Timestamp)(nil),    // 8: google.protobuf.Timestamp
 }
 var file_payment_v1_payment_proto_depIdxs = []int32{
 	2, // 0: payment.v1.CreatePaymentRequest.items:type_name -> payment.v1.PaymentItem
 	0, // 1: payment.v1.CreatePaymentResponse.status:type_name -> payment.v1.PaymentStatus
-	6, // 2: payment.v1.CreatePaymentResponse.expires_at:type_name -> google.protobuf.Timestamp
+	8, // 2: payment.v1.CreatePaymentResponse.expires_at:type_name -> google.protobuf.Timestamp
 	0, // 3: payment.v1.GetPaymentStatusResponse.status:type_name -> payment.v1.PaymentStatus
-	1, // 4: payment.v1.PaymentService.CreatePayment:input_type -> payment.v1.CreatePaymentRequest
-	4, // 5: payment.v1.PaymentService.GetPaymentStatus:input_type -> payment.v1.GetPaymentStatusRequest
-	3, // 6: payment.v1.PaymentService.CreatePayment:output_type -> payment.v1.CreatePaymentResponse
-	5, // 7: payment.v1.PaymentService.GetPaymentStatus:output_type -> payment.v1.GetPaymentStatusResponse
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0, // 4: payment.v1.SimulatePaymentResponse.status:type_name -> payment.v1.PaymentStatus
+	1, // 5: payment.v1.PaymentService.CreatePayment:input_type -> payment.v1.CreatePaymentRequest
+	4, // 6: payment.v1.PaymentService.GetPaymentStatus:input_type -> payment.v1.GetPaymentStatusRequest
+	6, // 7: payment.v1.PaymentService.SimulatePayment:input_type -> payment.v1.SimulatePaymentRequest
+	3, // 8: payment.v1.PaymentService.CreatePayment:output_type -> payment.v1.CreatePaymentResponse
+	5, // 9: payment.v1.PaymentService.GetPaymentStatus:output_type -> payment.v1.GetPaymentStatusResponse
+	7, // 10: payment.v1.PaymentService.SimulatePayment:output_type -> payment.v1.SimulatePaymentResponse
+	8, // [8:11] is the sub-list for method output_type
+	5, // [5:8] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_payment_v1_payment_proto_init() }
@@ -500,7 +616,7 @@ func file_payment_v1_payment_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_payment_v1_payment_proto_rawDesc), len(file_payment_v1_payment_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

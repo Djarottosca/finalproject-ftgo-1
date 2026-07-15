@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	PaymentService_CreatePayment_FullMethodName    = "/payment.v1.PaymentService/CreatePayment"
 	PaymentService_GetPaymentStatus_FullMethodName = "/payment.v1.PaymentService/GetPaymentStatus"
+	PaymentService_SimulatePayment_FullMethodName  = "/payment.v1.PaymentService/SimulatePayment"
 )
 
 // PaymentServiceClient is the client API for PaymentService service.
@@ -28,12 +29,17 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // Di-implement oleh payment-service, dipanggil oleh core-service.
-// Method callback "sudah paid" TIDAK di sini, itu kontrak milik core.
+// Semua komunikasi lewat gRPC — payment-service tidak punya HTTP server.
+// Sinyal "paid" ditemukan lewat polling GetPaymentStatus dari core (job Asynq),
+// bukan lewat webhook.
 type PaymentServiceClient interface {
-	// Dipanggil core pas checkout: bikin invoice ke provider, balikin link bayar.
+	// Dipanggil core pas checkout: bikin payment session, balikin link bayar.
 	CreatePayment(ctx context.Context, in *CreatePaymentRequest, opts ...grpc.CallOption) (*CreatePaymentResponse, error)
-	// Fallback kalau webhook Xendit kelewat: core nanya status terkini by reference.
+	// Di-poll core sampai status berubah jadi PAID/EXPIRED/FAILED.
 	GetPaymentStatus(ctx context.Context, in *GetPaymentStatusRequest, opts ...grpc.CallOption) (*GetPaymentStatusResponse, error)
+	// Khusus provider simulasi: memaksa pembayaran jadi PAID tanpa Xendit.
+	// Balikin FAILED_PRECONDITION kalau provider aktif bukan simulasi.
+	SimulatePayment(ctx context.Context, in *SimulatePaymentRequest, opts ...grpc.CallOption) (*SimulatePaymentResponse, error)
 }
 
 type paymentServiceClient struct {
@@ -64,17 +70,32 @@ func (c *paymentServiceClient) GetPaymentStatus(ctx context.Context, in *GetPaym
 	return out, nil
 }
 
+func (c *paymentServiceClient) SimulatePayment(ctx context.Context, in *SimulatePaymentRequest, opts ...grpc.CallOption) (*SimulatePaymentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SimulatePaymentResponse)
+	err := c.cc.Invoke(ctx, PaymentService_SimulatePayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentServiceServer is the server API for PaymentService service.
 // All implementations must embed UnimplementedPaymentServiceServer
 // for forward compatibility.
 //
 // Di-implement oleh payment-service, dipanggil oleh core-service.
-// Method callback "sudah paid" TIDAK di sini, itu kontrak milik core.
+// Semua komunikasi lewat gRPC — payment-service tidak punya HTTP server.
+// Sinyal "paid" ditemukan lewat polling GetPaymentStatus dari core (job Asynq),
+// bukan lewat webhook.
 type PaymentServiceServer interface {
-	// Dipanggil core pas checkout: bikin invoice ke provider, balikin link bayar.
+	// Dipanggil core pas checkout: bikin payment session, balikin link bayar.
 	CreatePayment(context.Context, *CreatePaymentRequest) (*CreatePaymentResponse, error)
-	// Fallback kalau webhook Xendit kelewat: core nanya status terkini by reference.
+	// Di-poll core sampai status berubah jadi PAID/EXPIRED/FAILED.
 	GetPaymentStatus(context.Context, *GetPaymentStatusRequest) (*GetPaymentStatusResponse, error)
+	// Khusus provider simulasi: memaksa pembayaran jadi PAID tanpa Xendit.
+	// Balikin FAILED_PRECONDITION kalau provider aktif bukan simulasi.
+	SimulatePayment(context.Context, *SimulatePaymentRequest) (*SimulatePaymentResponse, error)
 	mustEmbedUnimplementedPaymentServiceServer()
 }
 
@@ -90,6 +111,9 @@ func (UnimplementedPaymentServiceServer) CreatePayment(context.Context, *CreateP
 }
 func (UnimplementedPaymentServiceServer) GetPaymentStatus(context.Context, *GetPaymentStatusRequest) (*GetPaymentStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPaymentStatus not implemented")
+}
+func (UnimplementedPaymentServiceServer) SimulatePayment(context.Context, *SimulatePaymentRequest) (*SimulatePaymentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SimulatePayment not implemented")
 }
 func (UnimplementedPaymentServiceServer) mustEmbedUnimplementedPaymentServiceServer() {}
 func (UnimplementedPaymentServiceServer) testEmbeddedByValue()                        {}
@@ -148,6 +172,24 @@ func _PaymentService_GetPaymentStatus_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentService_SimulatePayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SimulatePaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).SimulatePayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_SimulatePayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).SimulatePayment(ctx, req.(*SimulatePaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentService_ServiceDesc is the grpc.ServiceDesc for PaymentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -162,6 +204,10 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPaymentStatus",
 			Handler:    _PaymentService_GetPaymentStatus_Handler,
+		},
+		{
+			MethodName: "SimulatePayment",
+			Handler:    _PaymentService_SimulatePayment_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
