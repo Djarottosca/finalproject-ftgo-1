@@ -43,12 +43,6 @@ type Invoice struct {
 	OrderID     int64 // <- tambahan, biar GetPaymentStatus bisa balikin order_id
 }
 
-type WebhookEvent struct {
-	Reference string
-	OrderID   int64
-	Status    Status
-}
-
 // Satu-satunya kontak ke dunia pembayaran (Xendit / simulasi).
 // Tidak ada ParseWebhook: payment-service murni gRPC, sinyal paid ditemukan
 // lewat polling GetInvoice dari core, bukan webhook.

@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -16,18 +17,21 @@ type AppConfig struct {
 	Env      string
 	Host     string
 	GRPCPort int
-	HTTPPort int
-	BaseURL  string // URL publik payment-service, buat nyusun link simulasi
+	BaseURL  string
 }
 
 type ProviderConfig struct {
-	Name string // "simulation" | "xendit"
+	Name       string        // "simulation" | "xendit"
+	InvoiceTTL time.Duration // umur invoice simulasi
 }
 
 type XenditConfig struct {
-	APIKey    string
-	BaseURL   string // default https://api.xendit.co
-	ReturnURL string // halaman core tempat user dibalikin abis bayar
+	APIKey      string
+	BaseURL     string
+	ReturnURL   string
+	HTTPTimeout time.Duration // timeout request ke Xendit
+	Currency    string        // "IDR"
+	Country     string        // "ID"
 }
 
 func Load() (*Config, error) {
@@ -44,27 +48,33 @@ func Load() (*Config, error) {
 	v.SetDefault("PAYMENT_ENV", "development")
 	v.SetDefault("PAYMENT_HOST", "0.0.0.0")
 	v.SetDefault("PAYMENT_GRPC_PORT", 9001)
-	v.SetDefault("PAYMENT_HTTP_PORT", 9002)
-	v.SetDefault("PAYMENT_BASE_URL", "http://localhost:9002")
+	v.SetDefault("PAYMENT_BASE_URL", "http://localhost:9001")
 	v.SetDefault("PAYMENT_PROVIDER", "simulation")
 	v.SetDefault("XENDIT_BASE_URL", "https://api.xendit.co")
-	v.SetDefault("XENDIT_RETURN_URL", "http://localhost:8080/orders")
+	v.SetDefault("XENDIT_RETURN_URL", "https://example.com/orders")
+	v.SetDefault("PAYMENT_INVOICE_TTL", "24h")
+	v.SetDefault("XENDIT_HTTP_TIMEOUT", "15s")
+	v.SetDefault("XENDIT_CURRENCY", "IDR")
+	v.SetDefault("XENDIT_COUNTRY", "ID")
 
 	cfg := &Config{
 		App: AppConfig{
 			Env:      v.GetString("PAYMENT_ENV"),
 			Host:     v.GetString("PAYMENT_HOST"),
 			GRPCPort: v.GetInt("PAYMENT_GRPC_PORT"),
-			HTTPPort: v.GetInt("PAYMENT_HTTP_PORT"),
 			BaseURL:  v.GetString("PAYMENT_BASE_URL"),
 		},
 		Provider: ProviderConfig{
-			Name: v.GetString("PAYMENT_PROVIDER"),
+			Name:       v.GetString("PAYMENT_PROVIDER"),
+			InvoiceTTL: v.GetDuration("PAYMENT_INVOICE_TTL"),
 		},
 		Xendit: XenditConfig{
-			APIKey:    v.GetString("XENDIT_API_KEY"),
-			BaseURL:   v.GetString("XENDIT_BASE_URL"),
-			ReturnURL: v.GetString("XENDIT_RETURN_URL"),
+			APIKey:      v.GetString("XENDIT_API_KEY"),
+			BaseURL:     v.GetString("XENDIT_BASE_URL"),
+			ReturnURL:   v.GetString("XENDIT_RETURN_URL"),
+			HTTPTimeout: v.GetDuration("XENDIT_HTTP_TIMEOUT"),
+			Currency:    v.GetString("XENDIT_CURRENCY"),
+			Country:     v.GetString("XENDIT_COUNTRY"),
 		},
 	}
 

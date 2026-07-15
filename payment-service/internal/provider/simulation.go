@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -14,7 +13,8 @@ import (
 // Dia mimik ingatan Xendit pakai map in-memory. Kalau service restart, data
 // simulasi ilang, dan itu gak masalah: sumber kebenaran tetap di core.
 type Simulation struct {
-	baseURL string // base URL payment-service, buat nyusun link /simulation/pay
+	baseURL    string
+	invoiceTTL time.Duration
 
 	mu    sync.RWMutex
 	store map[string]simRecord
@@ -25,15 +25,13 @@ type simRecord struct {
 	orderID int64
 }
 
-// invoiceTTL: umur invoice simulasi sebelum dianggap kadaluarsa.
-const invoiceTTL = 24 * time.Hour
-
 // NewSimulation bikin provider simulasi. baseURL diambil dari config
 // (mis. http://localhost:8081), dipakai buat nyusun payment_link.
-func NewSimulation(baseURL string) *Simulation {
+func NewSimulation(baseURL string, invoiceTTL time.Duration) *Simulation {
 	return &Simulation{
-		baseURL: baseURL,
-		store:   make(map[string]simRecord),
+		baseURL:    baseURL,
+		invoiceTTL: invoiceTTL,
+		store:      make(map[string]simRecord),
 	}
 }
 
@@ -46,9 +44,9 @@ func (s *Simulation) CreateInvoice(ctx context.Context, p CreateInvoiceParams) (
 	ref := newReference()
 	inv := Invoice{
 		Reference:   ref,
-		PaymentLink: fmt.Sprintf("%s/simulation/pay?ref=%s", s.baseURL, ref),
+		PaymentLink: fmt.Sprintf("%s/simulated-checkout/%s", s.baseURL, ref),
 		Status:      StatusPending,
-		ExpiresAt:   time.Now().Add(invoiceTTL),
+		ExpiresAt:   time.Now().Add(s.invoiceTTL),
 		OrderID:     p.OrderID, // <- tambahan
 	}
 
@@ -67,12 +65,6 @@ func (s *Simulation) GetInvoice(ctx context.Context, reference string) (Invoice,
 		return Invoice{}, ErrInvoiceNotFound
 	}
 	return rec.invoice, nil
-}
-
-// ParseWebhook: provider simulasi gak nerima webhook eksternal. Jalur "paid"-nya
-// lewat MarkPaid (dipicu endpoint /simulation/pay), bukan lewat sini.
-func (s *Simulation) ParseWebhook(payload []byte, signature string) (WebhookEvent, error) {
-	return WebhookEvent{}, errors.New("provider: simulasi tidak menerima webhook eksternal, pakai MarkPaid via /simulation/pay")
 }
 
 // MarkPaid nandain invoice jadi paid. DI LUAR interface PaymentProvider,
