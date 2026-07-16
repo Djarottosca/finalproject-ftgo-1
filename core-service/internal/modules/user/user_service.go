@@ -13,12 +13,17 @@ import (
 var ErrNotFound = errors.New("user not found")
 
 // Service defines the user use cases exposed to the handler layer.
+// Self-service methods (Me/UpdateMe) act on the caller's own account;
+// Admin* methods operate on an arbitrary user by ID and are reserved for
+// admin-only routes.
 type Service interface {
 	Create(ctx context.Context, req CreateUserRequest) (*UserResponse, error)
-	Get(ctx context.Context, id int) (*UserResponse, error)
-	List(ctx context.Context) ([]UserResponse, error)
-	Update(ctx context.Context, id int, req UpdateUserRequest) (*UserResponse, error)
-	Delete(ctx context.Context, id int) error
+	Me(ctx context.Context, id int) (*UserResponse, error)
+	UpdateMe(ctx context.Context, id int, req UpdateProfileRequest) (*UserResponse, error)
+	AdminList(ctx context.Context) ([]UserResponse, error)
+	AdminGetByID(ctx context.Context, id int) (*UserResponse, error)
+	AdminUpdate(ctx context.Context, id int, req UpdateUserRequest) (*UserResponse, error)
+	AdminDelete(ctx context.Context, id int) error
 }
 
 type service struct {
@@ -51,7 +56,33 @@ func (s *service) Create(ctx context.Context, req CreateUserRequest) (*UserRespo
 	return toResponse(user), nil
 }
 
-func (s *service) Get(ctx context.Context, id int) (*UserResponse, error) {
+// Me returns the caller's own profile (id comes from the JWT, not a path
+// param — every role can read its own account this way).
+func (s *service) Me(ctx context.Context, id int) (*UserResponse, error) {
+	return s.AdminGetByID(ctx, id)
+}
+
+// UpdateMe lets the caller edit their own profile. Deliberately narrower
+// than AdminUpdate: no Status field, so a user can't self-reactivate/ban.
+func (s *service) UpdateMe(ctx context.Context, id int, req UpdateProfileRequest) (*UserResponse, error) {
+	user, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	user.FullName = req.FullName
+	user.Email = req.Email
+	if err := s.repo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	return toResponse(user), nil
+}
+
+func (s *service) AdminGetByID(ctx context.Context, id int) (*UserResponse, error) {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -62,7 +93,7 @@ func (s *service) Get(ctx context.Context, id int) (*UserResponse, error) {
 	return toResponse(user), nil
 }
 
-func (s *service) List(ctx context.Context) ([]UserResponse, error) {
+func (s *service) AdminList(ctx context.Context) ([]UserResponse, error) {
 	users, err := s.repo.List(ctx)
 	if err != nil {
 		return nil, err
@@ -75,7 +106,7 @@ func (s *service) List(ctx context.Context) ([]UserResponse, error) {
 	return res, nil
 }
 
-func (s *service) Update(ctx context.Context, id int, req UpdateUserRequest) (*UserResponse, error) {
+func (s *service) AdminUpdate(ctx context.Context, id int, req UpdateUserRequest) (*UserResponse, error) {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -94,7 +125,7 @@ func (s *service) Update(ctx context.Context, id int, req UpdateUserRequest) (*U
 	return toResponse(user), nil
 }
 
-func (s *service) Delete(ctx context.Context, id int) error {
+func (s *service) AdminDelete(ctx context.Context, id int) error {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

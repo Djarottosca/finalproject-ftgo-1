@@ -19,7 +19,7 @@ var (
 // Service defines the product image use cases exposed to the handler layer.
 type Service interface {
 	Add(ctx context.Context, supplierID, productID int, req AddImageRequest) (*ImageResponse, error)
-	List(ctx context.Context, productID int) ([]ImageResponse, error)
+	ListMine(ctx context.Context, productID int) ([]ImageResponse, error)
 	Delete(ctx context.Context, supplierID, imageID int) error
 }
 
@@ -56,7 +56,7 @@ func (s *service) Add(ctx context.Context, supplierID, productID int, req AddIma
 	return toResponse(image), nil
 }
 
-func (s *service) List(ctx context.Context, productID int) ([]ImageResponse, error) {
+func (s *service) ListMine(ctx context.Context, productID int) ([]ImageResponse, error) {
 	images, err := s.repo.ListByProductID(ctx, productID)
 	if err != nil {
 		return nil, err

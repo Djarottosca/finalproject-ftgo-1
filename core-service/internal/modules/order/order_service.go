@@ -26,7 +26,7 @@ var (
 // Service defines the order use cases exposed to the handler layer.
 type Service interface {
 	Checkout(ctx context.Context, userID int) (*OrderResponse, error)
-	Get(ctx context.Context, id int) (*OrderResponse, error)
+	GetMine(ctx context.Context, userID, orderID int) (*OrderResponse, error)
 	ListMine(ctx context.Context, userID int) ([]OrderResponse, error)
 	ListForSupplier(ctx context.Context, supplierID int) ([]OrderResponse, error)
 	UpdateStatus(ctx context.Context, supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error)
@@ -107,13 +107,18 @@ func (s *service) Checkout(ctx context.Context, userID int) (*OrderResponse, err
 	return toResponse(o, items, shipment), nil
 }
 
-func (s *service) Get(ctx context.Context, id int) (*OrderResponse, error) {
-	o, err := s.repo.FindByID(ctx, id)
+// GetMine fetches an order by ID, but only if it belongs to userID —
+// prevents a user from reading another user's order by guessing IDs.
+func (s *service) GetMine(ctx context.Context, userID, orderID int) (*OrderResponse, error) {
+	o, err := s.repo.FindByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
 		return nil, err
+	}
+	if o.UserID != userID {
+		return nil, ErrForbidden
 	}
 
 	items, err := s.repo.ItemsByOrderID(ctx, o.ID)

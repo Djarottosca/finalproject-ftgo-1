@@ -47,18 +47,24 @@ func (h *Handler) ListMine(c echo.Context) error {
 	return response.SuccessResponse(c, http.StatusOK, "ok", res)
 }
 
-func (h *Handler) Get(c echo.Context) error {
+// GetMine handles GET /orders/:id. Returns the order only if it belongs
+// to the caller.
+func (h *Handler) GetMine(c echo.Context) error {
+	userID, _ := c.Get("user_id").(int)
+
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid id")
 	}
 
-	res, err := h.service.Get(c.Request().Context(), id)
+	res, err := h.service.GetMine(c.Request().Context(), userID, id)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return response.ErrorResponse(c, http.StatusNotFound, err.Error())
+		switch {
+		case errors.Is(err, ErrNotFound), errors.Is(err, ErrForbidden):
+			return response.ErrorResponse(c, http.StatusNotFound, "order not found")
+		default:
+			return response.ErrorResponse(c, http.StatusInternalServerError, "failed to get order")
 		}
-		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to get order")
 	}
 
 	return response.SuccessResponse(c, http.StatusOK, "ok", res)

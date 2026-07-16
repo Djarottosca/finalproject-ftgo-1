@@ -29,6 +29,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/payment"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/productimage"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/review"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/shipping"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/user"
@@ -162,21 +163,24 @@ func (a *App) RunServer() {
 	shippingService := shipping.NewService(rajaOngkirClient)
 	shippingHandler := shipping.NewHandler(shippingService)
 
+	reviewRepo := review.NewRepository(a.Database)
+	reviewService := review.NewService(reviewRepo, productRepo)
+	reviewHandler := review.NewHandler(reviewService)
+
 	v1 := e.Group("/api/v1")
 
-	// public routes
+	// public routes — no auth required
 	v1.POST("/auth/login", authHandler.Login)
 	v1.POST("/users", userHandler.Create)
-	v1.POST("/suppliers", supplierHandler.Register, authMW)
 	v1.GET("/products", productHandler.List)
 	v1.GET("/products/:slug", productHandler.Detail)
+	v1.GET("/products/:id/reviews", reviewHandler.List)
 
-	// user routes
-	v1.GET("/users", userHandler.List, authMW)
-	v1.GET("/users/:id", userHandler.Get, authMW)
-	v1.PUT("/users/:id", userHandler.Update, authMW)
-	v1.DELETE("/users/:id", userHandler.Delete, authMW)
+	// authenticated routes — any logged-in role (self-service)
+	v1.POST("/suppliers", supplierHandler.Register, authMW)
 	v1.GET("/suppliers/:id", supplierHandler.Get, authMW)
+	v1.GET("/users/me", userHandler.Me, authMW)
+	v1.PUT("/users/me", userHandler.UpdateMe, authMW)
 	v1.POST("/addresses", addressHandler.Create, authMW)
 	v1.GET("/addresses", addressHandler.List, authMW)
 	v1.PUT("/addresses/:id", addressHandler.Update, authMW)
@@ -187,11 +191,12 @@ func (a *App) RunServer() {
 	v1.DELETE("/cart/items/:product_id", cartHandler.RemoveItem, authMW)
 	v1.POST("/orders/checkout", orderHandler.Checkout, authMW)
 	v1.GET("/orders", orderHandler.ListMine, authMW)
-	v1.GET("/orders/:id", orderHandler.Get, authMW)
+	v1.GET("/orders/:id", orderHandler.GetMine, authMW)
 	v1.POST("/payments", paymentHandler.Create, authMW)
 	v1.GET("/payments/:orderId", paymentHandler.GetStatus, authMW)
 	v1.GET("/shipping/destinations", shippingHandler.SearchDestinations, authMW)
 	v1.POST("/shipping/cost", shippingHandler.CalculateCost, authMW)
+	v1.POST("/products/:id/reviews", reviewHandler.Create, authMW)
 
 	// supplier routes
 	v1.GET("/supplier/products", productHandler.ListMine, authMW, supplierMW)
@@ -201,12 +206,16 @@ func (a *App) RunServer() {
 	v1.PATCH("/supplier/products/:id/stock", productHandler.AdjustStock, authMW, supplierMW)
 	v1.DELETE("/supplier/products/:id", productHandler.Delete, authMW, supplierMW)
 	v1.POST("/supplier/products/:id/images", productImageHandler.Add, authMW, supplierMW)
-	v1.GET("/supplier/products/:id/images", productImageHandler.List, authMW, supplierMW)
+	v1.GET("/supplier/products/:id/images", productImageHandler.ListMine, authMW, supplierMW)
 	v1.DELETE("/supplier/product-images/:imageId", productImageHandler.Delete, authMW, supplierMW)
 	v1.GET("/supplier/orders", orderHandler.ListForSupplier, authMW, supplierMW)
 	v1.PATCH("/supplier/orders/:id/status", orderHandler.UpdateStatus, authMW, supplierMW)
 
 	// admin routes
+	v1.GET("/admin/users", userHandler.AdminList, authMW, adminMW)
+	v1.GET("/admin/users/:id", userHandler.AdminGetByID, authMW, adminMW)
+	v1.PUT("/admin/users/:id", userHandler.AdminUpdate, authMW, adminMW)
+	v1.DELETE("/admin/users/:id", userHandler.AdminDelete, authMW, adminMW)
 	v1.GET("/admin/suppliers", supplierHandler.List, authMW, adminMW)
 	v1.PATCH("/admin/suppliers/:id/review", supplierHandler.Review, authMW, adminMW)
 	v1.GET("/admin/reports/stock", adminHandler.StockReport, authMW, adminMW)

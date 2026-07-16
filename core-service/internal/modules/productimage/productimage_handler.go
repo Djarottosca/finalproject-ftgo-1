@@ -54,13 +54,16 @@ func (h *Handler) Add(c echo.Context) error {
 	return response.SuccessResponse(c, http.StatusCreated, "image added", res)
 }
 
-func (h *Handler) List(c echo.Context) error {
+// ListMine handles GET /supplier/products/:id/images. Supplier-only
+// listing (for managing/deleting own images) — public product detail
+// (GET /products/:slug) already embeds images for storefront use.
+func (h *Handler) ListMine(c echo.Context) error {
 	productID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}
 
-	res, err := h.service.List(c.Request().Context(), productID)
+	res, err := h.service.ListMine(c.Request().Context(), productID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list images")
 	}
