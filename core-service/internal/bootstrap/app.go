@@ -11,17 +11,21 @@ import (
 	echo "github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	redis "github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/cache"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/config"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/database"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/grpcclient"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/address"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/admin"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/order"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/payment"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/productimage"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
@@ -78,6 +82,19 @@ func (a *App) RunServer() {
 	e.Use(echoMiddleware.Recover())
 	e.Use(middleware.RequestLoggerMiddleware())
 
+	// gRPC connection to payment-service. grpc.NewClient is lazy: it does not
+	// dial until the first RPC, so core can start even if payment-service is
+	// down, and reconnects on its own. Closed on shutdown.
+	paymentConn, err := grpc.NewClient(
+		a.Config.PaymentServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to init payment-service client")
+	}
+	defer paymentConn.Close()
+	paymentClient := grpcclient.NewPaymentClient(paymentConn)
+
 	authManager := jwt.NewAuthManager(a.Config.JWTSecret)
 	authMW := middleware.AuthMiddleware(authManager)
 	adminMW := middleware.RequireRole("admin")
@@ -106,6 +123,9 @@ func (a *App) RunServer() {
 
 	orderRepo := order.NewRepository(a.Database)
 	orderHandler := order.NewHandler(order.NewService(orderRepo, cartRepo), supplierRepo)
+
+	paymentRepo := payment.NewRepository(a.Database)
+	paymentHandler := payment.NewHandler(payment.NewService(paymentRepo, paymentClient))
 
 	adminRepo := admin.NewRepository(a.Database)
 	adminHandler := admin.NewHandler(admin.NewService(adminRepo))
@@ -136,6 +156,8 @@ func (a *App) RunServer() {
 	v1.POST("/orders/checkout", orderHandler.Checkout, authMW)
 	v1.GET("/orders", orderHandler.ListMine, authMW)
 	v1.GET("/orders/:id", orderHandler.Get, authMW)
+	v1.POST("/payments", paymentHandler.Create, authMW)
+	v1.GET("/payments/:orderId", paymentHandler.GetStatus, authMW)
 
 	// supplier routes
 	v1.GET("/supplier/products", productHandler.ListMine, authMW, supplierMW)

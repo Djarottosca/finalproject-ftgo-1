@@ -13,6 +13,11 @@ type Config struct {
 	Database  DatabaseConfig
 	Redis     RedisConfig
 	JWTSecret string
+
+	// PaymentServiceAddr is the gRPC address of payment-service. It differs
+	// per environment (localhost in dev, a service name in deploy), so it's
+	// config, never hardcoded.
+	PaymentServiceAddr string
 }
 
 type AppConfig struct {
@@ -67,6 +72,7 @@ func Load() (*Config, error) {
 	v.SetDefault("DB_SSLMODE", "disable")
 	v.SetDefault("REDIS_PORT", 6379)
 	v.SetDefault("REDIS_DB", 0)
+	v.SetDefault("PAYMENT_SERVICE_ADDR", "localhost:9001")
 
 	cfg := &Config{
 		App: AppConfig{
@@ -88,7 +94,8 @@ func Load() (*Config, error) {
 			Password: v.GetString("REDIS_PASSWORD"),
 			DB:       v.GetInt("REDIS_DB"),
 		},
-		JWTSecret: v.GetString("JWT_SECRET"),
+		JWTSecret:          v.GetString("JWT_SECRET"),
+		PaymentServiceAddr: v.GetString("PAYMENT_SERVICE_ADDR"),
 	}
 
 	return cfg, nil
