@@ -25,6 +25,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/order"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/payment"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/productimage"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
@@ -95,6 +96,19 @@ func (a *App) RunServer() {
 	e.Use(echoMiddleware.Recover())
 	e.Use(middleware.RequestLoggerMiddleware())
 
+	// gRPC connection to payment-service. grpc.NewClient is lazy: it does not
+	// dial until the first RPC, so core can start even if payment-service is
+	// down, and reconnects on its own. Closed on shutdown.
+	paymentConn, err := grpc.NewClient(
+		a.Config.PaymentServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Msg("failed to init payment-service client")
+	}
+	defer paymentConn.Close()
+	paymentClient := grpcclient.NewPaymentClient(paymentConn)
+
 	authManager := jwt.NewAuthManager(a.Config.JWTSecret)
 	authMW := middleware.AuthMiddleware(authManager)
 	adminMW := middleware.RequireRole("admin")
@@ -123,6 +137,9 @@ func (a *App) RunServer() {
 
 	orderRepo := order.NewRepository(a.Database)
 	orderHandler := order.NewHandler(order.NewService(orderRepo, cartRepo, userRepo, a.NotificationClient), supplierRepo)
+
+	paymentRepo := payment.NewRepository(a.Database)
+	paymentHandler := payment.NewHandler(payment.NewService(paymentRepo, paymentClient))
 
 	adminRepo := admin.NewRepository(a.Database)
 	adminHandler := admin.NewHandler(admin.NewService(adminRepo))
@@ -153,6 +170,8 @@ func (a *App) RunServer() {
 	v1.POST("/orders/checkout", orderHandler.Checkout, authMW)
 	v1.GET("/orders", orderHandler.ListMine, authMW)
 	v1.GET("/orders/:id", orderHandler.Get, authMW)
+	v1.POST("/payments", paymentHandler.Create, authMW)
+	v1.GET("/payments/:orderId", paymentHandler.GetStatus, authMW)
 
 	// supplier routes
 	v1.GET("/supplier/products", productHandler.ListMine, authMW, supplierMW)
@@ -171,6 +190,8 @@ func (a *App) RunServer() {
 	v1.GET("/admin/suppliers", supplierHandler.List, authMW, adminMW)
 	v1.PATCH("/admin/suppliers/:id/review", supplierHandler.Review, authMW, adminMW)
 	v1.GET("/admin/reports/stock", adminHandler.StockReport, authMW, adminMW)
+	v1.GET("/admin/reports/sales", adminHandler.SalesReport, authMW, adminMW)
+	v1.GET("/admin/transactions", adminHandler.Transactions, authMW, adminMW)
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)

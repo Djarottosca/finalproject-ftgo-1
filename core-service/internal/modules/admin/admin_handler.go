@@ -28,3 +28,21 @@ func (h *Handler) StockReport(c echo.Context) error {
 
 	return response.SuccessResponse(c, http.StatusOK, "ok", res)
 }
+
+// SalesReport handles GET /admin/reports/sales
+func (h *Handler) SalesReport(c echo.Context) error {
+	res, err := h.service.SalesReport(c.Request().Context())
+	if err != nil {
+		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to generate sales report")
+	}
+	return response.SuccessResponse(c, http.StatusOK, "ok", res)
+}
+
+// Transactions handles GET /admin/transactions
+func (h *Handler) Transactions(c echo.Context) error {
+	res, err := h.service.Transactions(c.Request().Context())
+	if err != nil {
+		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list transactions")
+	}
+	return response.SuccessResponse(c, http.StatusOK, "ok", res)
+}

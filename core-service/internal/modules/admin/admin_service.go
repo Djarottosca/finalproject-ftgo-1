@@ -10,6 +10,8 @@ const defaultLowStockThreshold = 10
 // Service defines the admin reporting use cases exposed to the handler layer.
 type Service interface {
 	StockReport(ctx context.Context, threshold int) (*StockReportResponse, error)
+	SalesReport(ctx context.Context) (*SalesReportResponse, error)
+	Transactions(ctx context.Context) ([]TransactionItem, error)
 }
 
 type service struct {
@@ -37,4 +39,25 @@ func (s *service) StockReport(ctx context.Context, threshold int) (*StockReportR
 	}
 
 	return toStockReport(products, summary, threshold), nil
+}
+
+func (s *service) SalesReport(ctx context.Context) (*SalesReportResponse, error) {
+	summary, err := s.repo.SalesSummary(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	byStatus, err := s.repo.OrdersByStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SalesReportResponse{
+		Summary:        summary,
+		OrdersByStatus: byStatus,
+	}, nil
+}
+
+func (s *service) Transactions(ctx context.Context) ([]TransactionItem, error) {
+	return s.repo.ListTransactions(ctx)
 }
