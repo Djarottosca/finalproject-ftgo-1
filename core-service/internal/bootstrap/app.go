@@ -176,6 +176,8 @@ func (a *App) RunServer() {
 	v1.GET("/admin/suppliers", supplierHandler.List, authMW, adminMW)
 	v1.PATCH("/admin/suppliers/:id/review", supplierHandler.Review, authMW, adminMW)
 	v1.GET("/admin/reports/stock", adminHandler.StockReport, authMW, adminMW)
+	v1.GET("/admin/reports/sales", adminHandler.SalesReport, authMW, adminMW)
+	v1.GET("/admin/transactions", adminHandler.Transactions, authMW, adminMW)
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)
