@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"errors"
 
 	"golang.org/x/crypto/bcrypt"
@@ -13,11 +14,11 @@ var ErrNotFound = errors.New("user not found")
 
 // Service defines the user use cases exposed to the handler layer.
 type Service interface {
-	Create(req CreateUserRequest) (*UserResponse, error)
-	Get(id int) (*UserResponse, error)
-	List() ([]UserResponse, error)
-	Update(id int, req UpdateUserRequest) (*UserResponse, error)
-	Delete(id int) error
+	Create(ctx context.Context, req CreateUserRequest) (*UserResponse, error)
+	Get(ctx context.Context, id int) (*UserResponse, error)
+	List(ctx context.Context) ([]UserResponse, error)
+	Update(ctx context.Context, id int, req UpdateUserRequest) (*UserResponse, error)
+	Delete(ctx context.Context, id int) error
 }
 
 type service struct {
@@ -29,7 +30,7 @@ func NewService(repo Repository) Service {
 	return &service{repo: repo}
 }
 
-func (s *service) Create(req CreateUserRequest) (*UserResponse, error) {
+func (s *service) Create(ctx context.Context, req CreateUserRequest) (*UserResponse, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
@@ -43,60 +44,39 @@ func (s *service) Create(req CreateUserRequest) (*UserResponse, error) {
 		Status:       models.UserStatusActive,
 		RoleID:       req.RoleID,
 	}
-	if err := s.repo.Create(user); err != nil {
+	if err := s.repo.Create(ctx, user); err != nil {
 		return nil, err
 	}
 
-	return &UserResponse{
-		ID:       user.ID,
-		FullName: user.FullName,
-		Username: user.Username,
-		Email:    user.Email,
-		Status:   user.Status,
-		RoleID:   user.RoleID,
-	}, nil
+	return toResponse(user), nil
 }
 
-func (s *service) Get(id int) (*UserResponse, error) {
-	user, err := s.repo.FindByID(id)
+func (s *service) Get(ctx context.Context, id int) (*UserResponse, error) {
+	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
-	return &UserResponse{
-		ID:       user.ID,
-		FullName: user.FullName,
-		Username: user.Username,
-		Email:    user.Email,
-		Status:   user.Status,
-		RoleID:   user.RoleID,
-	}, nil
+	return toResponse(user), nil
 }
 
-func (s *service) List() ([]UserResponse, error) {
-	users, err := s.repo.List()
+func (s *service) List(ctx context.Context) ([]UserResponse, error) {
+	users, err := s.repo.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	res := make([]UserResponse, 0, len(users))
 	for _, u := range users {
-		res = append(res, UserResponse{
-			ID:       u.ID,
-			FullName: u.FullName,
-			Username: u.Username,
-			Email:    u.Email,
-			Status:   u.Status,
-			RoleID:   u.RoleID,
-		})
+		res = append(res, *toResponse(&u))
 	}
 	return res, nil
 }
 
-func (s *service) Update(id int, req UpdateUserRequest) (*UserResponse, error) {
-	user, err := s.repo.FindByID(id)
+func (s *service) Update(ctx context.Context, id int, req UpdateUserRequest) (*UserResponse, error) {
+	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -107,29 +87,22 @@ func (s *service) Update(id int, req UpdateUserRequest) (*UserResponse, error) {
 	user.FullName = req.FullName
 	user.Email = req.Email
 	user.Status = req.Status
-	if err := s.repo.Update(user); err != nil {
+	if err := s.repo.Update(ctx, user); err != nil {
 		return nil, err
 	}
 
-	return &UserResponse{
-		ID:       user.ID,
-		FullName: user.FullName,
-		Username: user.Username,
-		Email:    user.Email,
-		Status:   user.Status,
-		RoleID:   user.RoleID,
-	}, nil
+	return toResponse(user), nil
 }
 
-func (s *service) Delete(id int) error {
-	user, err := s.repo.FindByID(id)
+func (s *service) Delete(ctx context.Context, id int) error {
+	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrNotFound
 		}
 		return err
 	}
-	if err := s.repo.Delete(user.ID); err != nil {
+	if err := s.repo.Delete(ctx, user.ID); err != nil {
 		return err
 	}
 	return nil

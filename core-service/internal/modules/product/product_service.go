@@ -14,25 +14,25 @@ import (
 )
 
 var (
-	ErrProductNotFound = errors.New("produk tidak ditemukan")
-	ErrForbidden       = errors.New("produk bukan milik supplier ini")
-	ErrInvalidDiscount = errors.New("discount_type harus percentage, fixed, atau kosong")
-	ErrInvalidStock    = errors.New("stok hasil akhir tidak boleh negatif")
+	ErrProductNotFound = errors.New("product not found")
+	ErrForbidden       = errors.New("product does not belong to this supplier")
+	ErrInvalidDiscount = errors.New("discount_type must be percentage, fixed, or empty")
+	ErrInvalidStock    = errors.New("resulting stock cannot be negative")
 )
 
-// cacheTTL (60 detik)
+// cacheTTL is how long a cached list/detail response stays valid.
 const cacheTTL = 60 * time.Second
 
 // Service defines the product use cases exposed to the handler layer.
 type Service interface {
 	List(ctx context.Context, req ListRequest) (*ListResponse, error)
 	Detail(ctx context.Context, slug string) (*ProductDetailResponse, error)
-	Create(ctx context.Context, supplierID uint64, req CreateProductRequest) (*ProductDetailResponse, error)
-	ListMine(ctx context.Context, supplierID uint64) ([]ProductResponse, error)
-	Update(ctx context.Context, supplierID, productID uint64, req UpdateProductRequest) (*ProductDetailResponse, error)
-	SetDiscount(ctx context.Context, supplierID, productID uint64, req DiscountRequest) (*ProductDetailResponse, error)
-	AdjustStock(ctx context.Context, supplierID, productID uint64, req StockAdjustRequest) (*ProductDetailResponse, error)
-	Delete(ctx context.Context, supplierID, productID uint64) error
+	Create(ctx context.Context, supplierID int, req CreateProductRequest) (*ProductDetailResponse, error)
+	ListMine(ctx context.Context, supplierID int) ([]ProductResponse, error)
+	Update(ctx context.Context, supplierID, productID int, req UpdateProductRequest) (*ProductDetailResponse, error)
+	SetDiscount(ctx context.Context, supplierID, productID int, req DiscountRequest) (*ProductDetailResponse, error)
+	AdjustStock(ctx context.Context, supplierID, productID int, req StockAdjustRequest) (*ProductDetailResponse, error)
+	Delete(ctx context.Context, supplierID, productID int) error
 }
 
 type service struct {
@@ -45,7 +45,8 @@ func NewService(repo Repository, cache Cache) Service {
 	return &service{repo: repo, cache: cache}
 }
 
-// List menerapkan cache-aside: cek cache dulu, kalau miss baru query
+// List applies a cache-aside strategy: check the cache first, query the
+// database only on a miss.
 func (s *service) List(ctx context.Context, req ListRequest) (*ListResponse, error) {
 	cacheKey := fmt.Sprintf("products:list:kw=%s:cat=%d:page=%d:limit=%d", req.Keyword, req.CategoryID, req.Page, req.Limit)
 
@@ -54,8 +55,7 @@ func (s *service) List(ctx context.Context, req ListRequest) (*ListResponse, err
 		if jsonErr := json.Unmarshal([]byte(cached), &resp); jsonErr == nil {
 			return &resp, nil
 		}
-		//gagal unmarshal (format cache lama berubah), abaikan cache dan lanjut query database seperti biasa
-
+		// unmarshal failed (cached format changed) - ignore cache and query the database
 	}
 
 	filter := ListFilter{
@@ -67,7 +67,7 @@ func (s *service) List(ctx context.Context, req ListRequest) (*ListResponse, err
 
 	products, total, err := s.repo.FindAll(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("query produk: %w", err)
+		return nil, fmt.Errorf("query products: %w", err)
 	}
 
 	items := make([]ProductResponse, 0, len(products))
@@ -104,7 +104,7 @@ func (s *service) Detail(ctx context.Context, slug string) (*ProductDetailRespon
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrProductNotFound
 		}
-		return nil, fmt.Errorf("query produk: %w", err)
+		return nil, fmt.Errorf("query product: %w", err)
 	}
 
 	resp := toProductDetailResponse(*p)
@@ -117,7 +117,7 @@ func (s *service) Detail(ctx context.Context, slug string) (*ProductDetailRespon
 }
 
 // Create adds a new product owned by supplierID.
-func (s *service) Create(ctx context.Context, supplierID uint64, req CreateProductRequest) (*ProductDetailResponse, error) {
+func (s *service) Create(ctx context.Context, supplierID int, req CreateProductRequest) (*ProductDetailResponse, error) {
 	p := &models.Product{
 		ProductName: req.ProductName,
 		ProductSlug: slug.Generate(req.ProductName),
@@ -130,7 +130,7 @@ func (s *service) Create(ctx context.Context, supplierID uint64, req CreateProdu
 		Status:      models.ProductStatusActive,
 	}
 	if err := s.repo.Create(ctx, p); err != nil {
-		return nil, fmt.Errorf("buat produk: %w", err)
+		return nil, fmt.Errorf("create product: %w", err)
 	}
 
 	resp := toProductDetailResponse(*p)
@@ -138,10 +138,10 @@ func (s *service) Create(ctx context.Context, supplierID uint64, req CreateProdu
 }
 
 // ListMine returns every product owned by supplierID, active or not.
-func (s *service) ListMine(ctx context.Context, supplierID uint64) ([]ProductResponse, error) {
+func (s *service) ListMine(ctx context.Context, supplierID int) ([]ProductResponse, error) {
 	products, err := s.repo.FindAllBySupplier(ctx, supplierID)
 	if err != nil {
-		return nil, fmt.Errorf("query produk supplier: %w", err)
+		return nil, fmt.Errorf("query supplier products: %w", err)
 	}
 
 	items := make([]ProductResponse, 0, len(products))
@@ -152,7 +152,7 @@ func (s *service) ListMine(ctx context.Context, supplierID uint64) ([]ProductRes
 }
 
 // findOwned loads a product by ID and checks it belongs to supplierID.
-func (s *service) findOwned(ctx context.Context, supplierID, productID uint64) (*models.Product, error) {
+func (s *service) findOwned(ctx context.Context, supplierID, productID int) (*models.Product, error) {
 	p, err := s.repo.FindByID(ctx, productID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -167,7 +167,7 @@ func (s *service) findOwned(ctx context.Context, supplierID, productID uint64) (
 }
 
 // Update overwrites the editable fields of a product owned by supplierID.
-func (s *service) Update(ctx context.Context, supplierID, productID uint64, req UpdateProductRequest) (*ProductDetailResponse, error) {
+func (s *service) Update(ctx context.Context, supplierID, productID int, req UpdateProductRequest) (*ProductDetailResponse, error) {
 	p, err := s.findOwned(ctx, supplierID, productID)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (s *service) Update(ctx context.Context, supplierID, productID uint64, req 
 	p.Description = req.Description
 
 	if err := s.repo.Update(ctx, p); err != nil {
-		return nil, fmt.Errorf("ubah produk: %w", err)
+		return nil, fmt.Errorf("update product: %w", err)
 	}
 
 	resp := toProductDetailResponse(*p)
@@ -188,7 +188,7 @@ func (s *service) Update(ctx context.Context, supplierID, productID uint64, req 
 }
 
 // SetDiscount sets or clears the discount on a product owned by supplierID.
-func (s *service) SetDiscount(ctx context.Context, supplierID, productID uint64, req DiscountRequest) (*ProductDetailResponse, error) {
+func (s *service) SetDiscount(ctx context.Context, supplierID, productID int, req DiscountRequest) (*ProductDetailResponse, error) {
 	p, err := s.findOwned(ctx, supplierID, productID)
 	if err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ func (s *service) SetDiscount(ctx context.Context, supplierID, productID uint64,
 	}
 
 	if err := s.repo.Update(ctx, p); err != nil {
-		return nil, fmt.Errorf("ubah diskon: %w", err)
+		return nil, fmt.Errorf("update discount: %w", err)
 	}
 
 	resp := toProductDetailResponse(*p)
@@ -220,7 +220,7 @@ func (s *service) SetDiscount(ctx context.Context, supplierID, productID uint64,
 
 // AdjustStock adds req.Delta to the current stock of a product owned by
 // supplierID. Delta can be negative to deduct stock.
-func (s *service) AdjustStock(ctx context.Context, supplierID, productID uint64, req StockAdjustRequest) (*ProductDetailResponse, error) {
+func (s *service) AdjustStock(ctx context.Context, supplierID, productID int, req StockAdjustRequest) (*ProductDetailResponse, error) {
 	p, err := s.findOwned(ctx, supplierID, productID)
 	if err != nil {
 		return nil, err
@@ -233,7 +233,7 @@ func (s *service) AdjustStock(ctx context.Context, supplierID, productID uint64,
 	p.Stock = newStock
 
 	if err := s.repo.Update(ctx, p); err != nil {
-		return nil, fmt.Errorf("ubah stok: %w", err)
+		return nil, fmt.Errorf("update stock: %w", err)
 	}
 
 	resp := toProductDetailResponse(*p)
@@ -241,40 +241,9 @@ func (s *service) AdjustStock(ctx context.Context, supplierID, productID uint64,
 }
 
 // Delete removes a product owned by supplierID.
-func (s *service) Delete(ctx context.Context, supplierID, productID uint64) error {
+func (s *service) Delete(ctx context.Context, supplierID, productID int) error {
 	if _, err := s.findOwned(ctx, supplierID, productID); err != nil {
 		return err
 	}
 	return s.repo.Delete(ctx, productID)
-}
-
-func toProductResponse(p models.Product) ProductResponse {
-	return ProductResponse{
-		ID:             p.ID,
-		ProductName:    p.ProductName,
-		ProductSlug:    p.ProductSlug,
-		CategoryID:     p.CategoryID,
-		CategoryName:   p.Category.CategoryName,
-		Unit:           p.Unit,
-		Stock:          p.Stock,
-		Price:          p.Price,
-		DiscountType:   p.DiscountType,
-		DiscountAmount: p.DiscountAmount,
-		FinalPrice:     p.FinalPrice(),
-		Status:         p.Status,
-	}
-}
-
-func toProductDetailResponse(p models.Product) ProductDetailResponse {
-	images := make([]string, 0, len(p.Images))
-	for _, img := range p.Images {
-		images = append(images, img.ImageURL)
-	}
-
-	return ProductDetailResponse{
-		ProductResponse: toProductResponse(p),
-		Description:     p.Description,
-		SupplierID:      p.SupplierID,
-		Images:          images,
-	}
 }
