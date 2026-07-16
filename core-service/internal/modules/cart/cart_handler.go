@@ -59,7 +59,7 @@ func (h *Handler) UpdateItem(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
 	}
 
-	productID, err := strconv.ParseUint(c.Param("product_id"), 10, 64)
+	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}
@@ -85,7 +85,7 @@ func (h *Handler) RemoveItem(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
 	}
 
-	productID, err := strconv.ParseUint(c.Param("product_id"), 10, 64)
+	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}

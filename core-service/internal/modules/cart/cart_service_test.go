@@ -19,11 +19,11 @@ func newMockRepository() *mockRepository {
 	return &mockRepository{rows: make(map[string]models.Cart)}
 }
 
-func key(userID int, productID uint64) string {
+func key(userID int, productID int) string {
 	return fmt.Sprintf("%d:%d", userID, productID)
 }
 
-func (m *mockRepository) Upsert(_ context.Context, userID int, productID uint64, qty int) error {
+func (m *mockRepository) Upsert(_ context.Context, userID int, productID int, qty int) error {
 	k := key(userID, productID)
 	row, exists := m.rows[k]
 	if exists {
@@ -35,7 +35,7 @@ func (m *mockRepository) Upsert(_ context.Context, userID int, productID uint64,
 	return nil
 }
 
-func (m *mockRepository) UpdateQty(_ context.Context, userID int, productID uint64, qty int) (int64, error) {
+func (m *mockRepository) UpdateQty(_ context.Context, userID int, productID int, qty int) (int64, error) {
 	k := key(userID, productID)
 	row, exists := m.rows[k]
 	if !exists {
@@ -46,7 +46,7 @@ func (m *mockRepository) UpdateQty(_ context.Context, userID int, productID uint
 	return 1, nil
 }
 
-func (m *mockRepository) Delete(_ context.Context, userID int, productID uint64) (int64, error) {
+func (m *mockRepository) Delete(_ context.Context, userID int, productID int) (int64, error) {
 	k := key(userID, productID)
 	if _, exists := m.rows[k]; !exists {
 		return 0, nil
@@ -67,14 +67,14 @@ func (m *mockRepository) FindAllByUser(_ context.Context, userID int) ([]models.
 
 // mockProductLookup
 type mockProductLookup struct {
-	products map[uint64]models.Product
+	products map[int]models.Product
 }
 
 func newMockProductLookup() *mockProductLookup {
-	return &mockProductLookup{products: make(map[uint64]models.Product)}
+	return &mockProductLookup{products: make(map[int]models.Product)}
 }
 
-func (m *mockProductLookup) FindByID(_ context.Context, id uint64) (*models.Product, error) {
+func (m *mockProductLookup) FindByID(_ context.Context, id int) (*models.Product, error) {
 	p, ok := m.products[id]
 	if !ok {
 

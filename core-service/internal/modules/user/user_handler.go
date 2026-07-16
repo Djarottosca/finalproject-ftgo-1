@@ -24,7 +24,7 @@ func (h *Handler) Create(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Create(req)
+	res, err := h.service.Create(c.Request().Context(), req)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to create user")
 	}
@@ -33,7 +33,7 @@ func (h *Handler) Create(c echo.Context) error {
 }
 
 func (h *Handler) List(c echo.Context) error {
-	res, err := h.service.List()
+	res, err := h.service.List(c.Request().Context())
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list users")
 	}
@@ -47,7 +47,7 @@ func (h *Handler) Get(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid id")
 	}
 
-	res, err := h.service.Get(id)
+	res, err := h.service.Get(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return response.ErrorResponse(c, http.StatusNotFound, err.Error())
@@ -69,7 +69,7 @@ func (h *Handler) Update(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Update(id, req)
+	res, err := h.service.Update(c.Request().Context(), id, req)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return response.ErrorResponse(c, http.StatusNotFound, err.Error())
@@ -86,7 +86,7 @@ func (h *Handler) Delete(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid id")
 	}
 
-	if err := h.service.Delete(id); err != nil {
+	if err := h.service.Delete(c.Request().Context(), id); err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to delete user")
 	}
 

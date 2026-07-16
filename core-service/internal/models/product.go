@@ -12,14 +12,14 @@ const (
 
 // tabel `products`
 type Product struct {
-	ID             uint64         `gorm:"column:id;primaryKey"`
+	ID             int            `gorm:"column:id;primaryKey"`
 	ProductName    string         `gorm:"column:product_name"`
 	ProductSlug    string         `gorm:"column:product_slug"`
-	CategoryID     uint64         `gorm:"column:category_id"`
+	CategoryID     int            `gorm:"column:category_id"`
 	Category       Category       `gorm:"foreignKey:CategoryID;references:ID"`
 	Unit           string         `gorm:"column:unit"`
 	Stock          int            `gorm:"column:stock"`
-	SupplierID     uint64         `gorm:"column:supplier_id"`
+	SupplierID     int            `gorm:"column:supplier_id"`
 	Price          float64        `gorm:"column:price"`
 	Description    string         `gorm:"column:description"`
 	DiscountType   *string        `gorm:"column:discount_type"`

@@ -10,11 +10,11 @@ import (
 )
 
 type Repository interface {
-	// Upsert nambah qty kalau (user_id, product_id) udah ada di cart,
-	Upsert(ctx context.Context, userID int, productID uint64, qty int) error
-	// UpdateQty
-	UpdateQty(ctx context.Context, userID int, productID uint64, qty int) (int64, error)
-	Delete(ctx context.Context, userID int, productID uint64) (int64, error)
+	// Upsert adds qty if (user_id, product_id) already exists in the cart,
+	// otherwise inserts a new row.
+	Upsert(ctx context.Context, userID int, productID int, qty int) error
+	UpdateQty(ctx context.Context, userID int, productID int, qty int) (int64, error)
+	Delete(ctx context.Context, userID int, productID int) (int64, error)
 	FindAllByUser(ctx context.Context, userID int) ([]models.Cart, error)
 }
 
@@ -26,7 +26,7 @@ func NewRepository(db *gorm.DB) Repository {
 	return &gormRepository{db: db}
 }
 
-func (r *gormRepository) Upsert(ctx context.Context, userID int, productID uint64, qty int) error {
+func (r *gormRepository) Upsert(ctx context.Context, userID int, productID int, qty int) error {
 	cart := models.Cart{UserID: userID, ProductID: productID, Qty: qty}
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "user_id"}, {Name: "product_id"}},
@@ -37,14 +37,14 @@ func (r *gormRepository) Upsert(ctx context.Context, userID int, productID uint6
 	}).Create(&cart).Error
 }
 
-func (r *gormRepository) UpdateQty(ctx context.Context, userID int, productID uint64, qty int) (int64, error) {
+func (r *gormRepository) UpdateQty(ctx context.Context, userID int, productID int, qty int) (int64, error) {
 	result := r.db.WithContext(ctx).Model(&models.Cart{}).
 		Where("user_id = ? AND product_id = ?", userID, productID).
 		Update("qty", qty)
 	return result.RowsAffected, result.Error
 }
 
-func (r *gormRepository) Delete(ctx context.Context, userID int, productID uint64) (int64, error) {
+func (r *gormRepository) Delete(ctx context.Context, userID int, productID int) (int64, error) {
 	result := r.db.WithContext(ctx).
 		Where("user_id = ? AND product_id = ?", userID, productID).
 		Delete(&models.Cart{})

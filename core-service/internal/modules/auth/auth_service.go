@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 
 	"golang.org/x/crypto/bcrypt"
@@ -14,7 +15,7 @@ var ErrInvalidCredentials = errors.New("invalid username or password")
 
 // Service defines the auth use cases exposed to the handler layer.
 type Service interface {
-	Login(req LoginRequest) (*LoginResponse, error)
+	Login(ctx context.Context, req LoginRequest) (*LoginResponse, error)
 }
 
 type service struct {
@@ -27,8 +28,8 @@ func NewService(users user.Repository, auth *jwt.AuthManager) Service {
 	return &service{users: users, auth: auth}
 }
 
-func (s *service) Login(req LoginRequest) (*LoginResponse, error) {
-	u, err := s.users.FindByUsername(req.Username)
+func (s *service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
+	u, err := s.users.FindByUsername(ctx, req.Username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrInvalidCredentials

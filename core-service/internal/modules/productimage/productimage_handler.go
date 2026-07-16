@@ -24,7 +24,7 @@ func NewHandler(service Service, supplierRepo supplier.Repository) *Handler {
 
 func (h *Handler) Add(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
-	sup, err := h.supplierRepo.FindByUserID(userID)
+	sup, err := h.supplierRepo.FindByUserID(c.Request().Context(), userID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusForbidden, "you must be a registered supplier to perform this action")
 	}
@@ -60,7 +60,7 @@ func (h *Handler) List(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}
 
-	res, err := h.service.List(productID)
+	res, err := h.service.List(c.Request().Context(), productID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list images")
 	}
@@ -70,7 +70,7 @@ func (h *Handler) List(c echo.Context) error {
 
 func (h *Handler) Delete(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
-	sup, err := h.supplierRepo.FindByUserID(userID)
+	sup, err := h.supplierRepo.FindByUserID(c.Request().Context(), userID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusForbidden, "you must be a registered supplier to perform this action")
 	}

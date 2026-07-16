@@ -19,7 +19,7 @@ var (
 // Service defines the product image use cases exposed to the handler layer.
 type Service interface {
 	Add(ctx context.Context, supplierID, productID int, req AddImageRequest) (*ImageResponse, error)
-	List(productID int) ([]ImageResponse, error)
+	List(ctx context.Context, productID int) ([]ImageResponse, error)
 	Delete(ctx context.Context, supplierID, imageID int) error
 }
 
@@ -34,30 +34,30 @@ func NewService(repo Repository, productRepo product.Repository) Service {
 }
 
 func (s *service) Add(ctx context.Context, supplierID, productID int, req AddImageRequest) (*ImageResponse, error) {
-	prod, err := s.productRepo.FindByID(ctx, uint64(productID))
+	prod, err := s.productRepo.FindByID(ctx, productID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrProductNotFound
 		}
 		return nil, err
 	}
-	if int(prod.SupplierID) != supplierID {
+	if prod.SupplierID != supplierID {
 		return nil, ErrForbidden
 	}
 
 	image := &models.ProductImage{
-		ProductID: uint64(productID),
+		ProductID: productID,
 		ImageURL:  req.ImageURL,
 	}
-	if err := s.repo.Create(image); err != nil {
+	if err := s.repo.Create(ctx, image); err != nil {
 		return nil, err
 	}
 
 	return toResponse(image), nil
 }
 
-func (s *service) List(productID int) ([]ImageResponse, error) {
-	images, err := s.repo.ListByProductID(productID)
+func (s *service) List(ctx context.Context, productID int) ([]ImageResponse, error) {
+	images, err := s.repo.ListByProductID(ctx, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (s *service) List(productID int) ([]ImageResponse, error) {
 }
 
 func (s *service) Delete(ctx context.Context, supplierID, imageID int) error {
-	image, err := s.repo.FindByID(imageID)
+	image, err := s.repo.FindByID(ctx, imageID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrNotFound
@@ -85,9 +85,9 @@ func (s *service) Delete(ctx context.Context, supplierID, imageID int) error {
 		}
 		return err
 	}
-	if int(prod.SupplierID) != supplierID {
+	if prod.SupplierID != supplierID {
 		return ErrForbidden
 	}
 
-	return s.repo.Delete(imageID)
+	return s.repo.Delete(ctx, imageID)
 }

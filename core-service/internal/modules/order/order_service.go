@@ -20,10 +20,10 @@ var (
 // Service defines the order use cases exposed to the handler layer.
 type Service interface {
 	Checkout(ctx context.Context, userID int) (*OrderResponse, error)
-	Get(id int) (*OrderResponse, error)
-	ListMine(userID int) ([]OrderResponse, error)
-	ListForSupplier(supplierID int) ([]OrderResponse, error)
-	UpdateStatus(supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error)
+	Get(ctx context.Context, id int) (*OrderResponse, error)
+	ListMine(ctx context.Context, userID int) ([]OrderResponse, error)
+	ListForSupplier(ctx context.Context, supplierID int) ([]OrderResponse, error)
+	UpdateStatus(ctx context.Context, supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error)
 }
 
 type service struct {
@@ -55,7 +55,7 @@ func (s *service) Checkout(ctx context.Context, userID int) (*OrderResponse, err
 	for _, ci := range cartItems {
 		subtotal := ci.Product.Price * float64(ci.Qty)
 		items = append(items, models.OrderItem{
-			ProductID: int(ci.Product.ID),
+			ProductID: ci.Product.ID,
 			Price:     ci.Product.Price,
 			Qty:       ci.Qty,
 			Subtotal:  subtotal,
@@ -72,7 +72,7 @@ func (s *service) Checkout(ctx context.Context, userID int) (*OrderResponse, err
 		FinalPrice: totalPrice,
 		Status:     models.OrderStatusPending,
 	}
-	if err := s.repo.CreateWithItems(o, items); err != nil {
+	if err := s.repo.CreateWithItems(ctx, o, items); err != nil {
 		return nil, err
 	}
 
@@ -85,8 +85,8 @@ func (s *service) Checkout(ctx context.Context, userID int) (*OrderResponse, err
 	return toResponse(o, items), nil
 }
 
-func (s *service) Get(id int) (*OrderResponse, error) {
-	o, err := s.repo.FindByID(id)
+func (s *service) Get(ctx context.Context, id int) (*OrderResponse, error) {
+	o, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -94,7 +94,7 @@ func (s *service) Get(id int) (*OrderResponse, error) {
 		return nil, err
 	}
 
-	items, err := s.repo.ItemsByOrderID(o.ID)
+	items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,15 +102,15 @@ func (s *service) Get(id int) (*OrderResponse, error) {
 	return toResponse(o, items), nil
 }
 
-func (s *service) ListMine(userID int) ([]OrderResponse, error) {
-	orders, err := s.repo.ListByUserID(userID)
+func (s *service) ListMine(ctx context.Context, userID int) ([]OrderResponse, error) {
+	orders, err := s.repo.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	res := make([]OrderResponse, 0, len(orders))
 	for _, o := range orders {
-		items, err := s.repo.ItemsByOrderID(o.ID)
+		items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -119,15 +119,15 @@ func (s *service) ListMine(userID int) ([]OrderResponse, error) {
 	return res, nil
 }
 
-func (s *service) ListForSupplier(supplierID int) ([]OrderResponse, error) {
-	orders, err := s.repo.ListBySupplierID(supplierID)
+func (s *service) ListForSupplier(ctx context.Context, supplierID int) ([]OrderResponse, error) {
+	orders, err := s.repo.ListBySupplierID(ctx, supplierID)
 	if err != nil {
 		return nil, err
 	}
 
 	res := make([]OrderResponse, 0, len(orders))
 	for _, o := range orders {
-		items, err := s.repo.ItemsByOrderID(o.ID)
+		items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -138,12 +138,12 @@ func (s *service) ListForSupplier(supplierID int) ([]OrderResponse, error) {
 
 // UpdateStatus lets a supplier move an order to processing or shipped, once
 // it contains at least one of their products.
-func (s *service) UpdateStatus(supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error) {
+func (s *service) UpdateStatus(ctx context.Context, supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error) {
 	if req.Status != models.OrderStatusProcessing && req.Status != models.OrderStatusShipped {
 		return nil, ErrInvalidStatus
 	}
 
-	o, err := s.repo.FindByID(orderID)
+	o, err := s.repo.FindByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -151,7 +151,7 @@ func (s *service) UpdateStatus(supplierID, orderID int, req UpdateOrderStatusReq
 		return nil, err
 	}
 
-	supplierOrders, err := s.repo.ListBySupplierID(supplierID)
+	supplierOrders, err := s.repo.ListBySupplierID(ctx, supplierID)
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +167,11 @@ func (s *service) UpdateStatus(supplierID, orderID int, req UpdateOrderStatusReq
 	}
 
 	o.Status = req.Status
-	if err := s.repo.UpdateStatus(o); err != nil {
+	if err := s.repo.UpdateStatus(ctx, o); err != nil {
 		return nil, err
 	}
 
-	items, err := s.repo.ItemsByOrderID(o.ID)
+	items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 	if err != nil {
 		return nil, err
 	}

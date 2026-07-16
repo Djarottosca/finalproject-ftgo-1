@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
@@ -10,8 +12,8 @@ import (
 // It reads tables owned by other modules (products, and later orders/payments)
 // directly, following the same cross-table pattern as order.ListBySupplierID.
 type Repository interface {
-	ListProductsByStock() ([]models.Product, error)
-	StockSummary(threshold int) (StockSummary, error)
+	ListProductsByStock(ctx context.Context) ([]models.Product, error)
+	StockSummary(ctx context.Context, threshold int) (StockSummary, error)
 }
 
 type gormRepository struct {
@@ -25,9 +27,9 @@ func NewRepository(db *gorm.DB) Repository {
 
 // ListProductsByStock returns all products ordered by stock ascending, so the
 // items most at risk of running out appear first.
-func (r *gormRepository) ListProductsByStock() ([]models.Product, error) {
+func (r *gormRepository) ListProductsByStock(ctx context.Context) ([]models.Product, error) {
 	var products []models.Product
-	if err := r.db.Order("stock asc").Find(&products).Error; err != nil {
+	if err := r.db.WithContext(ctx).Order("stock asc").Find(&products).Error; err != nil {
 		return nil, err
 	}
 	return products, nil
@@ -35,9 +37,9 @@ func (r *gormRepository) ListProductsByStock() ([]models.Product, error) {
 
 // StockSummary computes the aggregate rollup in a single query, instead of
 // pulling every row into memory and counting in Go.
-func (r *gormRepository) StockSummary(threshold int) (StockSummary, error) {
+func (r *gormRepository) StockSummary(ctx context.Context, threshold int) (StockSummary, error) {
 	var summary StockSummary
-	err := r.db.Model(&models.Product{}).
+	err := r.db.WithContext(ctx).Model(&models.Product{}).
 		Select(`
 			COUNT(*) AS total_products,
 			COALESCE(SUM(stock), 0) AS total_stock,

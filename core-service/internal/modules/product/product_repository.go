@@ -11,7 +11,7 @@ import (
 // repository
 type ListFilter struct {
 	Keyword    string
-	CategoryID uint64
+	CategoryID int
 	Page       int
 	Limit      int
 }
@@ -19,11 +19,11 @@ type ListFilter struct {
 type Repository interface {
 	FindAll(ctx context.Context, filter ListFilter) ([]models.Product, int64, error)
 	FindBySlug(ctx context.Context, slug string) (*models.Product, error)
-	FindByID(ctx context.Context, id uint64) (*models.Product, error)
-	FindAllBySupplier(ctx context.Context, supplierID uint64) ([]models.Product, error)
+	FindByID(ctx context.Context, id int) (*models.Product, error)
+	FindAllBySupplier(ctx context.Context, supplierID int) ([]models.Product, error)
 	Create(ctx context.Context, product *models.Product) error
 	Update(ctx context.Context, product *models.Product) error
-	Delete(ctx context.Context, id uint64) error
+	Delete(ctx context.Context, id int) error
 }
 
 type gormRepository struct {
@@ -75,7 +75,7 @@ func (r *gormRepository) FindBySlug(ctx context.Context, slug string) (*models.P
 	return &product, nil
 }
 
-func (r *gormRepository) FindByID(ctx context.Context, id uint64) (*models.Product, error) {
+func (r *gormRepository) FindByID(ctx context.Context, id int) (*models.Product, error) {
 	var product models.Product
 	if err := r.db.WithContext(ctx).Preload("Category").First(&product, id).Error; err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func (r *gormRepository) FindByID(ctx context.Context, id uint64) (*models.Produ
 
 // FindAllBySupplier returns every product owned by a supplier regardless of
 // status, so the supplier can also see their own inactive listings.
-func (r *gormRepository) FindAllBySupplier(ctx context.Context, supplierID uint64) ([]models.Product, error) {
+func (r *gormRepository) FindAllBySupplier(ctx context.Context, supplierID int) ([]models.Product, error) {
 	var products []models.Product
 	err := r.db.WithContext(ctx).
 		Preload("Category").
@@ -106,6 +106,6 @@ func (r *gormRepository) Update(ctx context.Context, product *models.Product) er
 	return r.db.WithContext(ctx).Save(product).Error
 }
 
-func (r *gormRepository) Delete(ctx context.Context, id uint64) error {
+func (r *gormRepository) Delete(ctx context.Context, id int) error {
 	return r.db.WithContext(ctx).Delete(&models.Product{}, id).Error
 }

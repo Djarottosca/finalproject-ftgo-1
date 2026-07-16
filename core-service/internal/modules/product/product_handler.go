@@ -57,14 +57,14 @@ func (h *Handler) Detail(c echo.Context) error {
 	return response.SuccessResponse(c, http.StatusOK, "product detail fetched", res)
 }
 
-func (h *Handler) currentSupplierID(c echo.Context) (uint64, error) {
+func (h *Handler) currentSupplierID(c echo.Context) (int, error) {
 	userID, _ := c.Get("user_id").(int)
 
-	sup, err := h.supplierRepo.FindByUserID(userID)
+	sup, err := h.supplierRepo.FindByUserID(c.Request().Context(), userID)
 	if err != nil {
 		return 0, errors.New("you must be a registered supplier to perform this action")
 	}
-	return uint64(sup.ID), nil
+	return sup.ID, nil
 }
 
 func (h *Handler) Create(c echo.Context) error {
@@ -109,7 +109,7 @@ func (h *Handler) Update(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusForbidden, err.Error())
 	}
 
-	productID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	productID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}
@@ -136,7 +136,7 @@ func (h *Handler) SetDiscount(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusForbidden, err.Error())
 	}
 
-	productID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	productID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}
@@ -160,7 +160,7 @@ func (h *Handler) AdjustStock(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusForbidden, err.Error())
 	}
 
-	productID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	productID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}
@@ -184,7 +184,7 @@ func (h *Handler) Delete(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusForbidden, err.Error())
 	}
 
-	productID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	productID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}

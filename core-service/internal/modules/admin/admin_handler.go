@@ -21,7 +21,7 @@ func NewHandler(service Service) *Handler {
 func (h *Handler) StockReport(c echo.Context) error {
 	threshold, _ := strconv.Atoi(c.QueryParam("threshold")) // 0 if absent/invalid; service applies default
 
-	res, err := h.service.StockReport(threshold)
+	res, err := h.service.StockReport(c.Request().Context(), threshold)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to generate stock report")
 	}
