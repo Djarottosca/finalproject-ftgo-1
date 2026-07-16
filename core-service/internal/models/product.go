@@ -2,7 +2,15 @@ package models
 
 import "time"
 
-//tabel `products`
+const (
+	ProductStatusActive   = "active"
+	ProductStatusInactive = "inactive"
+
+	ProductDiscountPercentage = "percentage"
+	ProductDiscountFixed      = "fixed"
+)
+
+// tabel `products`
 type Product struct {
 	ID             uint64         `gorm:"column:id;primaryKey"`
 	ProductName    string         `gorm:"column:product_name"`

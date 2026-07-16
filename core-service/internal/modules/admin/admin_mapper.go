@@ -7,9 +7,9 @@ func toStockReport(products []models.Product, summary StockSummary, threshold in
 	for i := range products {
 		p := products[i]
 		items = append(items, StockReportItem{
-			ProductID:   p.ID,
+			ProductID:   int(p.ID),
 			ProductName: p.ProductName,
-			SupplierID:  p.SupplierID,
+			SupplierID:  int(p.SupplierID),
 			Stock:       p.Stock,
 			Price:       p.Price,
 			IsLowStock:  p.Stock < threshold,

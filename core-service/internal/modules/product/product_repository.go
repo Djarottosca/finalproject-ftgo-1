@@ -20,6 +20,10 @@ type Repository interface {
 	FindAll(ctx context.Context, filter ListFilter) ([]models.Product, int64, error)
 	FindBySlug(ctx context.Context, slug string) (*models.Product, error)
 	FindByID(ctx context.Context, id uint64) (*models.Product, error)
+	FindAllBySupplier(ctx context.Context, supplierID uint64) ([]models.Product, error)
+	Create(ctx context.Context, product *models.Product) error
+	Update(ctx context.Context, product *models.Product) error
+	Delete(ctx context.Context, id uint64) error
 }
 
 type gormRepository struct {
@@ -73,8 +77,35 @@ func (r *gormRepository) FindBySlug(ctx context.Context, slug string) (*models.P
 
 func (r *gormRepository) FindByID(ctx context.Context, id uint64) (*models.Product, error) {
 	var product models.Product
-	if err := r.db.WithContext(ctx).First(&product, id).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Category").First(&product, id).Error; err != nil {
 		return nil, err
 	}
 	return &product, nil
+}
+
+// FindAllBySupplier returns every product owned by a supplier regardless of
+// status, so the supplier can also see their own inactive listings.
+func (r *gormRepository) FindAllBySupplier(ctx context.Context, supplierID uint64) ([]models.Product, error) {
+	var products []models.Product
+	err := r.db.WithContext(ctx).
+		Preload("Category").
+		Where("supplier_id = ?", supplierID).
+		Order("created_at DESC").
+		Find(&products).Error
+	if err != nil {
+		return nil, err
+	}
+	return products, nil
+}
+
+func (r *gormRepository) Create(ctx context.Context, product *models.Product) error {
+	return r.db.WithContext(ctx).Create(product).Error
+}
+
+func (r *gormRepository) Update(ctx context.Context, product *models.Product) error {
+	return r.db.WithContext(ctx).Save(product).Error
+}
+
+func (r *gormRepository) Delete(ctx context.Context, id uint64) error {
+	return r.db.WithContext(ctx).Delete(&models.Product{}, id).Error
 }

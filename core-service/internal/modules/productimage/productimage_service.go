@@ -1,6 +1,7 @@
 package productimage
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
@@ -17,9 +18,9 @@ var (
 
 // Service defines the product image use cases exposed to the handler layer.
 type Service interface {
-	Add(supplierID, productID int, req AddImageRequest) (*ImageResponse, error)
+	Add(ctx context.Context, supplierID, productID int, req AddImageRequest) (*ImageResponse, error)
 	List(productID int) ([]ImageResponse, error)
-	Delete(supplierID, imageID int) error
+	Delete(ctx context.Context, supplierID, imageID int) error
 }
 
 type service struct {
@@ -32,20 +33,20 @@ func NewService(repo Repository, productRepo product.Repository) Service {
 	return &service{repo: repo, productRepo: productRepo}
 }
 
-func (s *service) Add(supplierID, productID int, req AddImageRequest) (*ImageResponse, error) {
-	prod, err := s.productRepo.FindByID(productID)
+func (s *service) Add(ctx context.Context, supplierID, productID int, req AddImageRequest) (*ImageResponse, error) {
+	prod, err := s.productRepo.FindByID(ctx, uint64(productID))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrProductNotFound
 		}
 		return nil, err
 	}
-	if prod.SupplierID != supplierID {
+	if int(prod.SupplierID) != supplierID {
 		return nil, ErrForbidden
 	}
 
 	image := &models.ProductImage{
-		ProductID: productID,
+		ProductID: uint64(productID),
 		ImageURL:  req.ImageURL,
 	}
 	if err := s.repo.Create(image); err != nil {
@@ -68,7 +69,7 @@ func (s *service) List(productID int) ([]ImageResponse, error) {
 	return res, nil
 }
 
-func (s *service) Delete(supplierID, imageID int) error {
+func (s *service) Delete(ctx context.Context, supplierID, imageID int) error {
 	image, err := s.repo.FindByID(imageID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -77,14 +78,14 @@ func (s *service) Delete(supplierID, imageID int) error {
 		return err
 	}
 
-	prod, err := s.productRepo.FindByID(image.ProductID)
+	prod, err := s.productRepo.FindByID(ctx, image.ProductID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrProductNotFound
 		}
 		return err
 	}
-	if prod.SupplierID != supplierID {
+	if int(prod.SupplierID) != supplierID {
 		return ErrForbidden
 	}
 

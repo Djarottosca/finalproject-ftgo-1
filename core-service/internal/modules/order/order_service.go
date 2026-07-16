@@ -1,13 +1,13 @@
 package order
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
-	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 )
 
 var (
@@ -19,7 +19,7 @@ var (
 
 // Service defines the order use cases exposed to the handler layer.
 type Service interface {
-	Checkout(userID int) (*OrderResponse, error)
+	Checkout(ctx context.Context, userID int) (*OrderResponse, error)
 	Get(id int) (*OrderResponse, error)
 	ListMine(userID int) ([]OrderResponse, error)
 	ListForSupplier(supplierID int) ([]OrderResponse, error)
@@ -27,20 +27,21 @@ type Service interface {
 }
 
 type service struct {
-	repo        Repository
-	cartRepo    cart.Repository
-	productRepo product.Repository
+	repo     Repository
+	cartRepo cart.Repository
 }
 
 // NewService returns the Service implementation backed by the given repositories.
-func NewService(repo Repository, cartRepo cart.Repository, productRepo product.Repository) Service {
-	return &service{repo: repo, cartRepo: cartRepo, productRepo: productRepo}
+func NewService(repo Repository, cartRepo cart.Repository) Service {
+	return &service{repo: repo, cartRepo: cartRepo}
 }
 
 // Checkout converts the user's cart into an order + order items, copying
 // the current product price so later price changes don't affect this order.
-func (s *service) Checkout(userID int) (*OrderResponse, error) {
-	cartItems, err := s.cartRepo.ListByUserID(userID)
+// cartRepo.FindAllByUser already preloads Product, so no separate product
+// lookup is needed here.
+func (s *service) Checkout(ctx context.Context, userID int) (*OrderResponse, error) {
+	cartItems, err := s.cartRepo.FindAllByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -52,14 +53,10 @@ func (s *service) Checkout(userID int) (*OrderResponse, error) {
 	var totalPrice float64
 	var totalItems int
 	for _, ci := range cartItems {
-		prod, err := s.productRepo.FindByID(ci.ProductID)
-		if err != nil {
-			return nil, err
-		}
-		subtotal := prod.Price * float64(ci.Qty)
+		subtotal := ci.Product.Price * float64(ci.Qty)
 		items = append(items, models.OrderItem{
-			ProductID: prod.ID,
-			Price:     prod.Price,
+			ProductID: int(ci.Product.ID),
+			Price:     ci.Product.Price,
 			Qty:       ci.Qty,
 			Subtotal:  subtotal,
 		})
@@ -80,7 +77,7 @@ func (s *service) Checkout(userID int) (*OrderResponse, error) {
 	}
 
 	for _, ci := range cartItems {
-		if err := s.cartRepo.Delete(userID, ci.ProductID); err != nil {
+		if _, err := s.cartRepo.Delete(ctx, userID, ci.ProductID); err != nil {
 			return nil, err
 		}
 	}

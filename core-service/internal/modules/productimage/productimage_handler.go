@@ -39,7 +39,7 @@ func (h *Handler) Add(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Add(sup.ID, productID, req)
+	res, err := h.service.Add(c.Request().Context(), sup.ID, productID, req)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrProductNotFound):
@@ -80,7 +80,7 @@ func (h *Handler) Delete(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid image id")
 	}
 
-	if err := h.service.Delete(sup.ID, imageID); err != nil {
+	if err := h.service.Delete(c.Request().Context(), sup.ID, imageID); err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
 			return response.ErrorResponse(c, http.StatusNotFound, err.Error())

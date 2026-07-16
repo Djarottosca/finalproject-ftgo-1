@@ -25,7 +25,7 @@ func NewHandler(service Service, supplierRepo supplier.Repository) *Handler {
 func (h *Handler) Checkout(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
 
-	res, err := h.service.Checkout(userID)
+	res, err := h.service.Checkout(c.Request().Context(), userID)
 	if err != nil {
 		if errors.Is(err, ErrEmptyCart) {
 			return response.ErrorResponse(c, http.StatusBadRequest, err.Error())

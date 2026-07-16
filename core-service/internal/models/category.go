@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-//tabel `categories`.
+// tabel `categories`.
 type Category struct {
 	ID           uint64    `gorm:"column:id;primaryKey"`
 	CategoryName string    `gorm:"column:category_name"`
