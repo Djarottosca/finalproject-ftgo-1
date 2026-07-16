@@ -103,7 +103,6 @@ var _ PaymentProvider = (*Xendit)(nil)
 // Implementasi PaymentProvider
 // ____________________________________________________________________________
 
-//
 // Catatan penting: p.Amount adalah OTORITATIF. Total tidak pernah dihitung
 // ulang dari p.Items — perhitungan harga adalah tanggung jawab core-service.
 // Items hanya diteruskan apa adanya untuk tampilan di halaman checkout.
