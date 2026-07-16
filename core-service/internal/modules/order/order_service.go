@@ -10,15 +10,17 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/grpcclient"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/shipping"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/user"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
 )
 
 var (
-	ErrNotFound      = errors.New("order not found")
-	ErrForbidden     = errors.New("order does not belong to this supplier")
-	ErrEmptyCart     = errors.New("cart is empty")
-	ErrInvalidStatus = errors.New("status must be processing or shipped")
+	ErrNotFound            = errors.New("order not found")
+	ErrForbidden           = errors.New("order does not belong to this supplier")
+	ErrEmptyCart           = errors.New("cart is empty")
+	ErrInvalidStatus       = errors.New("status must be processing or shipped")
+	ErrMissingShipmentInfo = errors.New("courier and tracking_number are required when status is shipped")
 )
 
 // Service defines the order use cases exposed to the handler layer.
@@ -31,17 +33,18 @@ type Service interface {
 }
 
 type service struct {
-	repo        Repository
-	cartRepo    cart.Repository
-	userRepo    user.Repository
-	notifClient *grpcclient.NotificationClient
+	repo         Repository
+	cartRepo     cart.Repository
+	userRepo     user.Repository
+	shippingRepo shipping.Repository
+	notifClient  *grpcclient.NotificationClient
 }
 
 // NewService returns the Service implementation backed by the given
 // repositories. notifClient boleh nil (mis. di unit test) — kalau nil,
 // pengiriman email dilewati tanpa error.
-func NewService(repo Repository, cartRepo cart.Repository, userRepo user.Repository, notifClient *grpcclient.NotificationClient) Service {
-	return &service{repo: repo, cartRepo: cartRepo, userRepo: userRepo, notifClient: notifClient}
+func NewService(repo Repository, cartRepo cart.Repository, userRepo user.Repository, shippingRepo shipping.Repository, notifClient *grpcclient.NotificationClient) Service {
+	return &service{repo: repo, cartRepo: cartRepo, userRepo: userRepo, shippingRepo: shippingRepo, notifClient: notifClient}
 }
 
 // Checkout converts the user's cart into an order + order items, copying
@@ -84,13 +87,24 @@ func (s *service) Checkout(ctx context.Context, userID int) (*OrderResponse, err
 		return nil, err
 	}
 
+	// Every order gets a pending shipment row up front; courier/tracking are
+	// filled in later once the supplier actually ships it. Best-effort: a
+	// failure here shouldn't roll back an already-placed order.
+	var shipment *models.Shipment
+	if s.shippingRepo != nil {
+		shipment, err = s.shippingRepo.Create(ctx, o.ID)
+		if err != nil {
+			logger.Log.Warn().Err(err).Int("order_id", o.ID).Msg("gagal membuat shipment record untuk order")
+		}
+	}
+
 	for _, ci := range cartItems {
 		if _, err := s.cartRepo.Delete(ctx, userID, ci.ProductID); err != nil {
 			return nil, err
 		}
 	}
 
-	return toResponse(o, items), nil
+	return toResponse(o, items, shipment), nil
 }
 
 func (s *service) Get(ctx context.Context, id int) (*OrderResponse, error) {
@@ -107,7 +121,7 @@ func (s *service) Get(ctx context.Context, id int) (*OrderResponse, error) {
 		return nil, err
 	}
 
-	return toResponse(o, items), nil
+	return toResponse(o, items, s.findShipment(ctx, o.ID)), nil
 }
 
 func (s *service) ListMine(ctx context.Context, userID int) ([]OrderResponse, error) {
@@ -122,7 +136,7 @@ func (s *service) ListMine(ctx context.Context, userID int) ([]OrderResponse, er
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, *toResponse(&o, items))
+		res = append(res, *toResponse(&o, items, s.findShipment(ctx, o.ID)))
 	}
 	return res, nil
 }
@@ -139,16 +153,20 @@ func (s *service) ListForSupplier(ctx context.Context, supplierID int) ([]OrderR
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, *toResponse(&o, items))
+		res = append(res, *toResponse(&o, items, s.findShipment(ctx, o.ID)))
 	}
 	return res, nil
 }
 
 // UpdateStatus lets a supplier move an order to processing or shipped, once
-// it contains at least one of their products.
+// it contains at least one of their products. Moving to shipped also fills
+// in the shipment's courier/tracking_number.
 func (s *service) UpdateStatus(ctx context.Context, supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error) {
 	if req.Status != models.OrderStatusProcessing && req.Status != models.OrderStatusShipped {
 		return nil, ErrInvalidStatus
+	}
+	if req.Status == models.OrderStatusShipped && (req.Courier == "" || req.TrackingNumber == "") {
+		return nil, ErrMissingShipmentInfo
 	}
 
 	o, err := s.repo.FindByID(ctx, orderID)
@@ -179,6 +197,12 @@ func (s *service) UpdateStatus(ctx context.Context, supplierID, orderID int, req
 		return nil, err
 	}
 
+	if req.Status == models.OrderStatusShipped && s.shippingRepo != nil {
+		if err := s.shippingRepo.MarkShipped(ctx, o.ID, req.Courier, req.TrackingNumber); err != nil {
+			logger.Log.Warn().Err(err).Int("order_id", o.ID).Msg("gagal update shipment record")
+		}
+	}
+
 	items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 	if err != nil {
 		return nil, err
@@ -186,7 +210,21 @@ func (s *service) UpdateStatus(ctx context.Context, supplierID, orderID int, req
 
 	s.notifyStatusChange(ctx, o)
 
-	return toResponse(o, items), nil
+	return toResponse(o, items, s.findShipment(ctx, o.ID)), nil
+}
+
+// findShipment is a best-effort lookup: a missing/failed shipment row
+// shouldn't break rendering the order itself, so errors are swallowed and
+// callers get nil (Shipment omitted from the response).
+func (s *service) findShipment(ctx context.Context, orderID int) *models.Shipment {
+	if s.shippingRepo == nil {
+		return nil
+	}
+	shipment, err := s.shippingRepo.FindByOrderID(ctx, orderID)
+	if err != nil {
+		return nil
+	}
+	return shipment
 }
 
 // notifyStatusChange kirim email ke user pemilik order lewat notification-service.

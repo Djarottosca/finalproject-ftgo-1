@@ -18,6 +18,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/cache"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/config"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/database"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/external/rajaongkir"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/grpcclient"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/address"
@@ -28,6 +29,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/payment"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/productimage"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/shipping"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/user"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/jwt"
@@ -65,11 +67,11 @@ func NewApp() *App {
 
 	// jalan di jaringan internal/dev, belum ada TLS antar service.
 	notifConn, err := grpc.NewClient(
-		cfg.Notification.Addr(),
+		cfg.NotificationServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		logger.Log.Fatal().Err(err).Str("addr", cfg.Notification.Addr()).Msg("failed to connect notification-service")
+		logger.Log.Fatal().Err(err).Str("addr", cfg.NotificationServiceAddr).Msg("failed to connect notification-service")
 	}
 	notifClient := grpcclient.NewNotificationClient(notifConn)
 
@@ -109,53 +111,56 @@ func (a *App) RunServer() {
 	e.Use(echoMiddleware.Recover())
 	e.Use(middleware.RequestLoggerMiddleware())
 
-	// gRPC connection to payment-service. grpc.NewClient is lazy: it does not
-	// dial until the first RPC, so core can start even if payment-service is
-	// down, and reconnects on its own. Closed on shutdown.
-	paymentConn, err := grpc.NewClient(
-		a.Config.PaymentServiceAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		logger.Log.Fatal().Err(err).Msg("failed to init payment-service client")
-	}
-	defer paymentConn.Close()
-	paymentClient := grpcclient.NewPaymentClient(paymentConn)
-
 	authManager := jwt.NewAuthManager(a.Config.JWTSecret)
 	authMW := middleware.AuthMiddleware(authManager)
 	adminMW := middleware.RequireRole("admin")
 	supplierMW := middleware.RequireRole("supplier")
 
 	userRepo := user.NewRepository(a.Database)
-	userHandler := user.NewHandler(user.NewService(userRepo))
+	userService := user.NewService(userRepo)
+	userHandler := user.NewHandler(userService)
 
-	authHandler := auth.NewHandler(auth.NewService(userRepo, authManager))
+	authService := auth.NewService(userRepo, authManager)
+	authHandler := auth.NewHandler(authService)
 
 	supplierRepo := supplier.NewRepository(a.Database)
-	supplierHandler := supplier.NewHandler(supplier.NewService(supplierRepo))
+	supplierService := supplier.NewService(supplierRepo)
+	supplierHandler := supplier.NewHandler(supplierService)
 
 	productRepo := product.NewRepository(a.Database)
 	productCache := product.NewRedisCache(a.Redis)
-	productHandler := product.NewHandler(product.NewService(productRepo, productCache), supplierRepo)
+	productService := product.NewService(productRepo, productCache)
+	productHandler := product.NewHandler(productService, supplierRepo)
 
 	productImageRepo := productimage.NewRepository(a.Database)
-	productImageHandler := productimage.NewHandler(productimage.NewService(productImageRepo, productRepo), supplierRepo)
+	productImageService := productimage.NewService(productImageRepo, productRepo)
+	productImageHandler := productimage.NewHandler(productImageService, supplierRepo)
 
 	addressRepo := address.NewRepository(a.Database)
-	addressHandler := address.NewHandler(address.NewService(addressRepo))
+	addressService := address.NewService(addressRepo)
+	addressHandler := address.NewHandler(addressService)
 
 	cartRepo := cart.NewRepository(a.Database)
-	cartHandler := cart.NewHandler(cart.NewService(cartRepo, productRepo))
+	cartService := cart.NewService(cartRepo, productRepo)
+	cartHandler := cart.NewHandler(cartService)
+
+	shippingRepo := shipping.NewRepository(a.Database)
 
 	orderRepo := order.NewRepository(a.Database)
-	orderHandler := order.NewHandler(order.NewService(orderRepo, cartRepo, userRepo, a.NotificationClient), supplierRepo)
+	orderService := order.NewService(orderRepo, cartRepo, userRepo, shippingRepo, a.NotificationClient)
+	orderHandler := order.NewHandler(orderService, supplierRepo)
 
 	paymentRepo := payment.NewRepository(a.Database)
-	paymentHandler := payment.NewHandler(payment.NewService(paymentRepo, paymentClient))
+	paymentService := payment.NewService(paymentRepo, a.PaymentClient)
+	paymentHandler := payment.NewHandler(paymentService)
 
 	adminRepo := admin.NewRepository(a.Database)
-	adminHandler := admin.NewHandler(admin.NewService(adminRepo))
+	adminService := admin.NewService(adminRepo)
+	adminHandler := admin.NewHandler(adminService)
+
+	rajaOngkirClient := rajaongkir.NewHttpClient(&a.Config.RajaOngkir)
+	shippingService := shipping.NewService(rajaOngkirClient)
+	shippingHandler := shipping.NewHandler(shippingService)
 
 	v1 := e.Group("/api/v1")
 
@@ -185,6 +190,8 @@ func (a *App) RunServer() {
 	v1.GET("/orders/:id", orderHandler.Get, authMW)
 	v1.POST("/payments", paymentHandler.Create, authMW)
 	v1.GET("/payments/:orderId", paymentHandler.GetStatus, authMW)
+	v1.GET("/shipping/destinations", shippingHandler.SearchDestinations, authMW)
+	v1.POST("/shipping/cost", shippingHandler.CalculateCost, authMW)
 
 	// supplier routes
 	v1.GET("/supplier/products", productHandler.ListMine, authMW, supplierMW)
@@ -208,7 +215,7 @@ func (a *App) RunServer() {
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)
-		logger.Log.Info().Str("addr", addr).Msg("starting server")
+		logger.Log.Info().Str("addr", addr).Str("env", a.Config.App.Env).Msg("starting server")
 		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
 			logger.Log.Fatal().Err(err).Msg("server error")
 		}
@@ -223,6 +230,11 @@ func (a *App) RunServer() {
 	if a.NotificationConn != nil {
 		if err := a.NotificationConn.Close(); err != nil {
 			logger.Log.Warn().Err(err).Msg("failed to close notification-service connection")
+		}
+	}
+	if a.PaymentConn != nil {
+		if err := a.PaymentConn.Close(); err != nil {
+			logger.Log.Warn().Err(err).Msg("failed to close payment-service connection")
 		}
 	}
 }

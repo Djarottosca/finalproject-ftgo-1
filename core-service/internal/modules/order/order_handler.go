@@ -103,7 +103,7 @@ func (h *Handler) UpdateStatus(c echo.Context) error {
 			return response.ErrorResponse(c, http.StatusNotFound, err.Error())
 		case errors.Is(err, ErrForbidden):
 			return response.ErrorResponse(c, http.StatusForbidden, err.Error())
-		case errors.Is(err, ErrInvalidStatus):
+		case errors.Is(err, ErrInvalidStatus), errors.Is(err, ErrMissingShipmentInfo):
 			return response.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		default:
 			return response.ErrorResponse(c, http.StatusInternalServerError, "failed to update order status")
