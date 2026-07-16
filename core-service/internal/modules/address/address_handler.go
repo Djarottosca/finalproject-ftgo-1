@@ -26,7 +26,7 @@ func (h *Handler) Create(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Create(userID, req)
+	res, err := h.service.Create(c.Request().Context(), userID, req)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to create address")
 	}
@@ -37,7 +37,7 @@ func (h *Handler) Create(c echo.Context) error {
 func (h *Handler) List(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
 
-	res, err := h.service.List(userID)
+	res, err := h.service.List(c.Request().Context(), userID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list addresses")
 	}
@@ -58,7 +58,7 @@ func (h *Handler) Update(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Update(userID, id, req)
+	res, err := h.service.Update(c.Request().Context(), userID, id, req)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
@@ -81,7 +81,7 @@ func (h *Handler) Delete(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid id")
 	}
 
-	if err := h.service.Delete(userID, id); err != nil {
+	if err := h.service.Delete(c.Request().Context(), userID, id); err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
 			return response.ErrorResponse(c, http.StatusNotFound, err.Error())

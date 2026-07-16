@@ -25,7 +25,7 @@ func NewHandler(service Service, supplierRepo supplier.Repository) *Handler {
 func (h *Handler) Checkout(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
 
-	res, err := h.service.Checkout(userID)
+	res, err := h.service.Checkout(c.Request().Context(), userID)
 	if err != nil {
 		if errors.Is(err, ErrEmptyCart) {
 			return response.ErrorResponse(c, http.StatusBadRequest, err.Error())
@@ -39,7 +39,7 @@ func (h *Handler) Checkout(c echo.Context) error {
 func (h *Handler) ListMine(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
 
-	res, err := h.service.ListMine(userID)
+	res, err := h.service.ListMine(c.Request().Context(), userID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list orders")
 	}
@@ -53,7 +53,7 @@ func (h *Handler) Get(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid id")
 	}
 
-	res, err := h.service.Get(id)
+	res, err := h.service.Get(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return response.ErrorResponse(c, http.StatusNotFound, err.Error())
@@ -66,12 +66,12 @@ func (h *Handler) Get(c echo.Context) error {
 
 func (h *Handler) ListForSupplier(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
-	sup, err := h.supplierRepo.FindByUserID(userID)
+	sup, err := h.supplierRepo.FindByUserID(c.Request().Context(), userID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusForbidden, "you must be a registered supplier to perform this action")
 	}
 
-	res, err := h.service.ListForSupplier(sup.ID)
+	res, err := h.service.ListForSupplier(c.Request().Context(), sup.ID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list orders")
 	}
@@ -81,7 +81,7 @@ func (h *Handler) ListForSupplier(c echo.Context) error {
 
 func (h *Handler) UpdateStatus(c echo.Context) error {
 	userID, _ := c.Get("user_id").(int)
-	sup, err := h.supplierRepo.FindByUserID(userID)
+	sup, err := h.supplierRepo.FindByUserID(c.Request().Context(), userID)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusForbidden, "you must be a registered supplier to perform this action")
 	}
@@ -96,7 +96,7 @@ func (h *Handler) UpdateStatus(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.UpdateStatus(sup.ID, id, req)
+	res, err := h.service.UpdateStatus(c.Request().Context(), sup.ID, id, req)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):

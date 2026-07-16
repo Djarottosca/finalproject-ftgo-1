@@ -1,6 +1,7 @@
 package productimage
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
@@ -17,9 +18,9 @@ var (
 
 // Service defines the product image use cases exposed to the handler layer.
 type Service interface {
-	Add(supplierID, productID int, req AddImageRequest) (*ImageResponse, error)
-	List(productID int) ([]ImageResponse, error)
-	Delete(supplierID, imageID int) error
+	Add(ctx context.Context, supplierID, productID int, req AddImageRequest) (*ImageResponse, error)
+	List(ctx context.Context, productID int) ([]ImageResponse, error)
+	Delete(ctx context.Context, supplierID, imageID int) error
 }
 
 type service struct {
@@ -32,8 +33,8 @@ func NewService(repo Repository, productRepo product.Repository) Service {
 	return &service{repo: repo, productRepo: productRepo}
 }
 
-func (s *service) Add(supplierID, productID int, req AddImageRequest) (*ImageResponse, error) {
-	prod, err := s.productRepo.FindByID(productID)
+func (s *service) Add(ctx context.Context, supplierID, productID int, req AddImageRequest) (*ImageResponse, error) {
+	prod, err := s.productRepo.FindByID(ctx, productID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrProductNotFound
@@ -48,15 +49,15 @@ func (s *service) Add(supplierID, productID int, req AddImageRequest) (*ImageRes
 		ProductID: productID,
 		ImageURL:  req.ImageURL,
 	}
-	if err := s.repo.Create(image); err != nil {
+	if err := s.repo.Create(ctx, image); err != nil {
 		return nil, err
 	}
 
 	return toResponse(image), nil
 }
 
-func (s *service) List(productID int) ([]ImageResponse, error) {
-	images, err := s.repo.ListByProductID(productID)
+func (s *service) List(ctx context.Context, productID int) ([]ImageResponse, error) {
+	images, err := s.repo.ListByProductID(ctx, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +69,8 @@ func (s *service) List(productID int) ([]ImageResponse, error) {
 	return res, nil
 }
 
-func (s *service) Delete(supplierID, imageID int) error {
-	image, err := s.repo.FindByID(imageID)
+func (s *service) Delete(ctx context.Context, supplierID, imageID int) error {
+	image, err := s.repo.FindByID(ctx, imageID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrNotFound
@@ -77,7 +78,7 @@ func (s *service) Delete(supplierID, imageID int) error {
 		return err
 	}
 
-	prod, err := s.productRepo.FindByID(image.ProductID)
+	prod, err := s.productRepo.FindByID(ctx, image.ProductID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrProductNotFound
@@ -88,5 +89,5 @@ func (s *service) Delete(supplierID, imageID int) error {
 		return ErrForbidden
 	}
 
-	return s.repo.Delete(imageID)
+	return s.repo.Delete(ctx, imageID)
 }

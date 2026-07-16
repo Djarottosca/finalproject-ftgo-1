@@ -36,7 +36,7 @@ func (m *mockRepository) FindBySlug(_ context.Context, slug string) (*models.Pro
 	return nil, gorm.ErrRecordNotFound
 }
 
-func (m *mockRepository) FindByID(_ context.Context, id uint64) (*models.Product, error) {
+func (m *mockRepository) FindByID(_ context.Context, id int) (*models.Product, error) {
 	for _, p := range m.products {
 		if p.ID == id {
 			return &p, nil
@@ -46,6 +46,41 @@ func (m *mockRepository) FindByID(_ context.Context, id uint64) (*models.Product
 		return nil, m.findErr
 	}
 	return nil, gorm.ErrRecordNotFound
+}
+
+func (m *mockRepository) FindAllBySupplier(_ context.Context, supplierID int) ([]models.Product, error) {
+	var result []models.Product
+	for _, p := range m.products {
+		if p.SupplierID == supplierID {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockRepository) Create(_ context.Context, p *models.Product) error {
+	m.products = append(m.products, *p)
+	return nil
+}
+
+func (m *mockRepository) Update(_ context.Context, p *models.Product) error {
+	for i := range m.products {
+		if m.products[i].ID == p.ID {
+			m.products[i] = *p
+			return nil
+		}
+	}
+	return gorm.ErrRecordNotFound
+}
+
+func (m *mockRepository) Delete(_ context.Context, id int) error {
+	for i := range m.products {
+		if m.products[i].ID == id {
+			m.products = append(m.products[:i], m.products[i+1:]...)
+			return nil
+		}
+	}
+	return gorm.ErrRecordNotFound
 }
 
 type mockCache struct {

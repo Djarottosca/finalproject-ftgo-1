@@ -26,7 +26,7 @@ func (h *Handler) Register(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Register(userID, req)
+	res, err := h.service.Register(c.Request().Context(), userID, req)
 	if err != nil {
 		if errors.Is(err, ErrAlreadyExists) {
 			return response.ErrorResponse(c, http.StatusConflict, err.Error())
@@ -43,7 +43,7 @@ func (h *Handler) Get(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid id")
 	}
 
-	res, err := h.service.Get(id)
+	res, err := h.service.Get(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return response.ErrorResponse(c, http.StatusNotFound, err.Error())
@@ -57,7 +57,7 @@ func (h *Handler) Get(c echo.Context) error {
 func (h *Handler) List(c echo.Context) error {
 	status := c.QueryParam("status")
 
-	res, err := h.service.List(status)
+	res, err := h.service.List(c.Request().Context(), status)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list suppliers")
 	}
@@ -76,7 +76,7 @@ func (h *Handler) Review(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Review(id, req)
+	res, err := h.service.Review(c.Request().Context(), id, req)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):

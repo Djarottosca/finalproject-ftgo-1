@@ -1,6 +1,7 @@
 package address
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
@@ -15,10 +16,10 @@ var (
 
 // Service defines the address use cases exposed to the handler layer.
 type Service interface {
-	Create(userID int, req CreateAddressRequest) (*AddressResponse, error)
-	List(userID int) ([]AddressResponse, error)
-	Update(userID, addressID int, req UpdateAddressRequest) (*AddressResponse, error)
-	Delete(userID, addressID int) error
+	Create(ctx context.Context, userID int, req CreateAddressRequest) (*AddressResponse, error)
+	List(ctx context.Context, userID int) ([]AddressResponse, error)
+	Update(ctx context.Context, userID, addressID int, req UpdateAddressRequest) (*AddressResponse, error)
+	Delete(ctx context.Context, userID, addressID int) error
 }
 
 type service struct {
@@ -30,9 +31,9 @@ func NewService(repo Repository) Service {
 	return &service{repo: repo}
 }
 
-func (s *service) Create(userID int, req CreateAddressRequest) (*AddressResponse, error) {
+func (s *service) Create(ctx context.Context, userID int, req CreateAddressRequest) (*AddressResponse, error) {
 	if req.IsPrimary {
-		if err := s.repo.ClearPrimary(userID); err != nil {
+		if err := s.repo.ClearPrimary(ctx, userID); err != nil {
 			return nil, err
 		}
 	}
@@ -46,15 +47,15 @@ func (s *service) Create(userID int, req CreateAddressRequest) (*AddressResponse
 		PostalCode:  req.PostalCode,
 		IsPrimary:   req.IsPrimary,
 	}
-	if err := s.repo.Create(addr); err != nil {
+	if err := s.repo.Create(ctx, addr); err != nil {
 		return nil, err
 	}
 
 	return toResponse(addr), nil
 }
 
-func (s *service) List(userID int) ([]AddressResponse, error) {
-	addrs, err := s.repo.ListByUserID(userID)
+func (s *service) List(ctx context.Context, userID int) ([]AddressResponse, error) {
+	addrs, err := s.repo.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -66,8 +67,8 @@ func (s *service) List(userID int) ([]AddressResponse, error) {
 	return res, nil
 }
 
-func (s *service) Update(userID, addressID int, req UpdateAddressRequest) (*AddressResponse, error) {
-	addr, err := s.repo.FindByID(addressID)
+func (s *service) Update(ctx context.Context, userID, addressID int, req UpdateAddressRequest) (*AddressResponse, error) {
+	addr, err := s.repo.FindByID(ctx, addressID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -79,7 +80,7 @@ func (s *service) Update(userID, addressID int, req UpdateAddressRequest) (*Addr
 	}
 
 	if req.IsPrimary && !addr.IsPrimary {
-		if err := s.repo.ClearPrimary(userID); err != nil {
+		if err := s.repo.ClearPrimary(ctx, userID); err != nil {
 			return nil, err
 		}
 	}
@@ -91,15 +92,15 @@ func (s *service) Update(userID, addressID int, req UpdateAddressRequest) (*Addr
 	addr.PostalCode = req.PostalCode
 	addr.IsPrimary = req.IsPrimary
 
-	if err := s.repo.Update(addr); err != nil {
+	if err := s.repo.Update(ctx, addr); err != nil {
 		return nil, err
 	}
 
 	return toResponse(addr), nil
 }
 
-func (s *service) Delete(userID, addressID int) error {
-	addr, err := s.repo.FindByID(addressID)
+func (s *service) Delete(ctx context.Context, userID, addressID int) error {
+	addr, err := s.repo.FindByID(ctx, addressID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrNotFound
@@ -109,5 +110,5 @@ func (s *service) Delete(userID, addressID int) error {
 	if addr.UserID != userID {
 		return ErrForbidden
 	}
-	return s.repo.Delete(addressID)
+	return s.repo.Delete(ctx, addressID)
 }

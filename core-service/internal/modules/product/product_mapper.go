@@ -2,24 +2,33 @@ package product
 
 import "github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
 
-func toResponse(product *models.Product) *ProductResponse {
-	description := ""
-	if product.Description != nil {
-		description = *product.Description
+func toProductResponse(p models.Product) ProductResponse {
+	return ProductResponse{
+		ID:             p.ID,
+		ProductName:    p.ProductName,
+		ProductSlug:    p.ProductSlug,
+		CategoryID:     p.CategoryID,
+		CategoryName:   p.Category.CategoryName,
+		Unit:           p.Unit,
+		Stock:          p.Stock,
+		Price:          p.Price,
+		DiscountType:   p.DiscountType,
+		DiscountAmount: p.DiscountAmount,
+		FinalPrice:     p.FinalPrice(),
+		Status:         p.Status,
+	}
+}
+
+func toProductDetailResponse(p models.Product) ProductDetailResponse {
+	images := make([]string, 0, len(p.Images))
+	for _, img := range p.Images {
+		images = append(images, img.ImageURL)
 	}
 
-	return &ProductResponse{
-		ID:             product.ID,
-		ProductName:    product.ProductName,
-		Slug:           product.ProductSlug,
-		CategoryID:     product.CategoryID,
-		Unit:           product.Unit,
-		Stock:          product.Stock,
-		SupplierID:     product.SupplierID,
-		Price:          product.Price,
-		Description:    description,
-		DiscountType:   product.DiscountType,
-		DiscountAmount: product.DiscountAmount,
-		Status:         product.Status,
+	return ProductDetailResponse{
+		ProductResponse: toProductResponse(p),
+		Description:     p.Description,
+		SupplierID:      p.SupplierID,
+		Images:          images,
 	}
 }

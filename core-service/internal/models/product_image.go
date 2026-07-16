@@ -4,8 +4,8 @@ import "time"
 
 // ProductImage merepresentasikan tabel `product_images`.
 type ProductImage struct {
-	ID        uint64    `gorm:"column:id;primaryKey"`
-	ProductID uint64    `gorm:"column:product_id"`
+	ID        int       `gorm:"column:id;primaryKey"`
+	ProductID int       `gorm:"column:product_id"`
 	ImageURL  string    `gorm:"column:image_url"`
 	CreatedAt time.Time `gorm:"column:created_at"`
 }

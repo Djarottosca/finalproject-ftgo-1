@@ -2,8 +2,8 @@ package cart
 
 // POST /cart/items
 type AddItemRequest struct {
-	ProductID uint64 `json:"product_id" validate:"required"`
-	Qty       int    `json:"qty" validate:"required,min=1"`
+	ProductID int `json:"product_id" validate:"required"`
+	Qty       int `json:"qty" validate:"required,min=1"`
 }
 
 // PUT /cart/items/:product_id
@@ -12,7 +12,7 @@ type UpdateItemRequest struct {
 }
 
 type CartItemResponse struct {
-	ProductID   uint64  `json:"product_id"`
+	ProductID   int     `json:"product_id"`
 	ProductName string  `json:"product_name"`
 	ProductSlug string  `json:"product_slug"`
 	Price       float64 `json:"price"`

@@ -1,13 +1,13 @@
 package order
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
-	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/product"
 )
 
 var (
@@ -19,28 +19,29 @@ var (
 
 // Service defines the order use cases exposed to the handler layer.
 type Service interface {
-	Checkout(userID int) (*OrderResponse, error)
-	Get(id int) (*OrderResponse, error)
-	ListMine(userID int) ([]OrderResponse, error)
-	ListForSupplier(supplierID int) ([]OrderResponse, error)
-	UpdateStatus(supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error)
+	Checkout(ctx context.Context, userID int) (*OrderResponse, error)
+	Get(ctx context.Context, id int) (*OrderResponse, error)
+	ListMine(ctx context.Context, userID int) ([]OrderResponse, error)
+	ListForSupplier(ctx context.Context, supplierID int) ([]OrderResponse, error)
+	UpdateStatus(ctx context.Context, supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error)
 }
 
 type service struct {
-	repo        Repository
-	cartRepo    cart.Repository
-	productRepo product.Repository
+	repo     Repository
+	cartRepo cart.Repository
 }
 
 // NewService returns the Service implementation backed by the given repositories.
-func NewService(repo Repository, cartRepo cart.Repository, productRepo product.Repository) Service {
-	return &service{repo: repo, cartRepo: cartRepo, productRepo: productRepo}
+func NewService(repo Repository, cartRepo cart.Repository) Service {
+	return &service{repo: repo, cartRepo: cartRepo}
 }
 
 // Checkout converts the user's cart into an order + order items, copying
 // the current product price so later price changes don't affect this order.
-func (s *service) Checkout(userID int) (*OrderResponse, error) {
-	cartItems, err := s.cartRepo.ListByUserID(userID)
+// cartRepo.FindAllByUser already preloads Product, so no separate product
+// lookup is needed here.
+func (s *service) Checkout(ctx context.Context, userID int) (*OrderResponse, error) {
+	cartItems, err := s.cartRepo.FindAllByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -52,14 +53,10 @@ func (s *service) Checkout(userID int) (*OrderResponse, error) {
 	var totalPrice float64
 	var totalItems int
 	for _, ci := range cartItems {
-		prod, err := s.productRepo.FindByID(ci.ProductID)
-		if err != nil {
-			return nil, err
-		}
-		subtotal := prod.Price * float64(ci.Qty)
+		subtotal := ci.Product.Price * float64(ci.Qty)
 		items = append(items, models.OrderItem{
-			ProductID: prod.ID,
-			Price:     prod.Price,
+			ProductID: ci.Product.ID,
+			Price:     ci.Product.Price,
 			Qty:       ci.Qty,
 			Subtotal:  subtotal,
 		})
@@ -75,12 +72,12 @@ func (s *service) Checkout(userID int) (*OrderResponse, error) {
 		FinalPrice: totalPrice,
 		Status:     models.OrderStatusPending,
 	}
-	if err := s.repo.CreateWithItems(o, items); err != nil {
+	if err := s.repo.CreateWithItems(ctx, o, items); err != nil {
 		return nil, err
 	}
 
 	for _, ci := range cartItems {
-		if err := s.cartRepo.Delete(userID, ci.ProductID); err != nil {
+		if _, err := s.cartRepo.Delete(ctx, userID, ci.ProductID); err != nil {
 			return nil, err
 		}
 	}
@@ -88,8 +85,8 @@ func (s *service) Checkout(userID int) (*OrderResponse, error) {
 	return toResponse(o, items), nil
 }
 
-func (s *service) Get(id int) (*OrderResponse, error) {
-	o, err := s.repo.FindByID(id)
+func (s *service) Get(ctx context.Context, id int) (*OrderResponse, error) {
+	o, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -97,7 +94,7 @@ func (s *service) Get(id int) (*OrderResponse, error) {
 		return nil, err
 	}
 
-	items, err := s.repo.ItemsByOrderID(o.ID)
+	items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -105,15 +102,15 @@ func (s *service) Get(id int) (*OrderResponse, error) {
 	return toResponse(o, items), nil
 }
 
-func (s *service) ListMine(userID int) ([]OrderResponse, error) {
-	orders, err := s.repo.ListByUserID(userID)
+func (s *service) ListMine(ctx context.Context, userID int) ([]OrderResponse, error) {
+	orders, err := s.repo.ListByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	res := make([]OrderResponse, 0, len(orders))
 	for _, o := range orders {
-		items, err := s.repo.ItemsByOrderID(o.ID)
+		items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -122,15 +119,15 @@ func (s *service) ListMine(userID int) ([]OrderResponse, error) {
 	return res, nil
 }
 
-func (s *service) ListForSupplier(supplierID int) ([]OrderResponse, error) {
-	orders, err := s.repo.ListBySupplierID(supplierID)
+func (s *service) ListForSupplier(ctx context.Context, supplierID int) ([]OrderResponse, error) {
+	orders, err := s.repo.ListBySupplierID(ctx, supplierID)
 	if err != nil {
 		return nil, err
 	}
 
 	res := make([]OrderResponse, 0, len(orders))
 	for _, o := range orders {
-		items, err := s.repo.ItemsByOrderID(o.ID)
+		items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -141,12 +138,12 @@ func (s *service) ListForSupplier(supplierID int) ([]OrderResponse, error) {
 
 // UpdateStatus lets a supplier move an order to processing or shipped, once
 // it contains at least one of their products.
-func (s *service) UpdateStatus(supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error) {
+func (s *service) UpdateStatus(ctx context.Context, supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error) {
 	if req.Status != models.OrderStatusProcessing && req.Status != models.OrderStatusShipped {
 		return nil, ErrInvalidStatus
 	}
 
-	o, err := s.repo.FindByID(orderID)
+	o, err := s.repo.FindByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
@@ -154,7 +151,7 @@ func (s *service) UpdateStatus(supplierID, orderID int, req UpdateOrderStatusReq
 		return nil, err
 	}
 
-	supplierOrders, err := s.repo.ListBySupplierID(supplierID)
+	supplierOrders, err := s.repo.ListBySupplierID(ctx, supplierID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,11 +167,11 @@ func (s *service) UpdateStatus(supplierID, orderID int, req UpdateOrderStatusReq
 	}
 
 	o.Status = req.Status
-	if err := s.repo.UpdateStatus(o); err != nil {
+	if err := s.repo.UpdateStatus(ctx, o); err != nil {
 		return nil, err
 	}
 
-	items, err := s.repo.ItemsByOrderID(o.ID)
+	items, err := s.repo.ItemsByOrderID(ctx, o.ID)
 	if err != nil {
 		return nil, err
 	}

@@ -23,7 +23,7 @@ func (h *Handler) Login(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Login(req)
+	res, err := h.service.Login(c.Request().Context(), req)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
 			return response.ErrorResponse(c, http.StatusUnauthorized, err.Error())

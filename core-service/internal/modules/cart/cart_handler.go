@@ -12,20 +12,11 @@ import (
 )
 
 type Handler struct {
-	service *Service
+	service Service
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
-}
-
-// RegisterRoutes: g AuthMiddleware
-func (h *Handler) RegisterRoutes(g *echo.Group) {
-	cg := g.Group("/cart")
-	cg.GET("", h.GetCart)
-	cg.POST("/items", h.AddItem)
-	cg.PUT("/items/:product_id", h.UpdateItem)
-	cg.DELETE("/items/:product_id", h.RemoveItem)
 }
 
 func (h *Handler) GetCart(c echo.Context) error {
@@ -68,7 +59,7 @@ func (h *Handler) UpdateItem(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
 	}
 
-	productID, err := strconv.ParseUint(c.Param("product_id"), 10, 64)
+	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}
@@ -94,7 +85,7 @@ func (h *Handler) RemoveItem(c echo.Context) error {
 		return response.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
 	}
 
-	productID, err := strconv.ParseUint(c.Param("product_id"), 10, 64)
+	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid product id")
 	}
