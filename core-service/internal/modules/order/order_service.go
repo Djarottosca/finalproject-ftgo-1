@@ -32,19 +32,26 @@ type Service interface {
 	UpdateStatus(ctx context.Context, supplierID, orderID int, req UpdateOrderStatusRequest) (*OrderResponse, error)
 }
 
+// EmailEnqueuer queues an email job instead of calling notification-service
+// synchronously — implemented by task.Enqueuer. Kept as a narrow interface
+// here so this module doesn't import asynq directly.
+type EmailEnqueuer interface {
+	EnqueueSendEmail(ctx context.Context, in grpcclient.EmailInput) error
+}
+
 type service struct {
 	repo         Repository
 	cartRepo     cart.Repository
 	userRepo     user.Repository
 	shippingRepo shipping.Repository
-	notifClient  *grpcclient.NotificationClient
+	emailQueue   EmailEnqueuer
 }
 
 // NewService returns the Service implementation backed by the given
-// repositories. notifClient boleh nil (mis. di unit test) — kalau nil,
+// repositories. emailQueue boleh nil (mis. di unit test) — kalau nil,
 // pengiriman email dilewati tanpa error.
-func NewService(repo Repository, cartRepo cart.Repository, userRepo user.Repository, shippingRepo shipping.Repository, notifClient *grpcclient.NotificationClient) Service {
-	return &service{repo: repo, cartRepo: cartRepo, userRepo: userRepo, shippingRepo: shippingRepo, notifClient: notifClient}
+func NewService(repo Repository, cartRepo cart.Repository, userRepo user.Repository, shippingRepo shipping.Repository, emailQueue EmailEnqueuer) Service {
+	return &service{repo: repo, cartRepo: cartRepo, userRepo: userRepo, shippingRepo: shippingRepo, emailQueue: emailQueue}
 }
 
 // Checkout converts the user's cart into an order + order items, copying
@@ -232,11 +239,13 @@ func (s *service) findShipment(ctx context.Context, orderID int) *models.Shipmen
 	return shipment
 }
 
-// notifyStatusChange kirim email ke user pemilik order lewat notification-service.
-// Sengaja fire-and-forget: gagal kirim email cuma di-log, gak bikin
-// UpdateStatus ikut gagal — status order di DB sudah berhasil berubah.
+// notifyStatusChange enqueues an email job for the order's owner instead of
+// calling notification-service directly, so a slow/unavailable mail
+// provider never blocks this request. Sengaja fire-and-forget: gagal
+// enqueue cuma di-log, gak bikin UpdateStatus ikut gagal — status order di
+// DB sudah berhasil berubah.
 func (s *service) notifyStatusChange(ctx context.Context, o *models.Order) {
-	if s.notifClient == nil {
+	if s.emailQueue == nil {
 		return
 	}
 
@@ -253,13 +262,13 @@ func (s *service) notifyStatusChange(ctx context.Context, o *models.Order) {
 	)
 	text := fmt.Sprintf("Halo %s, status pesanan #%d kamu sekarang: %s.", u.FullName, o.ID, o.Status)
 
-	if _, err := s.notifClient.SendEmail(ctx, grpcclient.EmailInput{
+	if err := s.emailQueue.EnqueueSendEmail(ctx, grpcclient.EmailInput{
 		ToEmail:     u.Email,
 		ToName:      u.FullName,
 		Subject:     subject,
 		HTMLContent: html,
 		TextContent: text,
 	}); err != nil {
-		logger.Log.Warn().Err(err).Int("order_id", o.ID).Msg("gagal kirim email notifikasi status order")
+		logger.Log.Warn().Err(err).Int("order_id", o.ID).Msg("gagal enqueue email notifikasi status order")
 	}
 }

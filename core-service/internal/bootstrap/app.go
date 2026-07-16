@@ -2,12 +2,14 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 
+	"github.com/hibiken/asynq"
 	echo "github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	redis "github.com/redis/go-redis/v9"
@@ -34,6 +36,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/shipping"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/user"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/task"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/jwt"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/validator"
@@ -128,8 +131,12 @@ func (a *App) RunServer() {
 	authService := auth.NewService(userRepo, a.Database, authManager, tokenBlacklist)
 	authHandler := auth.NewHandler(authService)
 
+	asynqClient := asynq.NewClient(a.asynqRedisOpt())
+	defer asynqClient.Close()
+	emailQueue := task.NewEnqueuer(asynqClient)
+
 	supplierRepo := supplier.NewRepository(a.Database)
-	supplierService := supplier.NewService(supplierRepo, a.Database, authManager)
+	supplierService := supplier.NewService(supplierRepo, userRepo, a.Database, authManager, emailQueue)
 	supplierHandler := supplier.NewHandler(supplierService)
 
 	productRepo := product.NewRepository(a.Database)
@@ -152,7 +159,7 @@ func (a *App) RunServer() {
 	shippingRepo := shipping.NewRepository(a.Database)
 
 	orderRepo := order.NewRepository(a.Database)
-	orderService := order.NewService(orderRepo, cartRepo, userRepo, shippingRepo, a.NotificationClient)
+	orderService := order.NewService(orderRepo, cartRepo, userRepo, shippingRepo, emailQueue)
 	orderHandler := order.NewHandler(orderService, supplierRepo)
 
 	paymentRepo := payment.NewRepository(a.Database)
@@ -259,14 +266,43 @@ func (a *App) RunServer() {
 	}
 }
 
-// RunWorker blocks running the Asynq worker.
+// asynqRedisOpt reuses the same Redis config as the rest of core-service
+// (cache, token blacklist) instead of introducing a second Redis env block.
+func (a *App) asynqRedisOpt() asynq.RedisClientOpt {
+	return asynq.RedisClientOpt{
+		Addr:     fmt.Sprintf("%s:%d", a.Config.Redis.Host, a.Config.Redis.Port),
+		Password: a.Config.Redis.Password,
+		DB:       a.Config.Redis.DB,
+	}
+}
+
+// RunWorker blocks running the Asynq worker that processes background jobs
+// (currently: outbound email via notification-service gRPC).
 func (a *App) RunWorker() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	logger.Log.Info().Msg("starting worker")
+	srv := asynq.NewServer(a.asynqRedisOpt(), asynq.Config{
+		Logger: task.NewAsynqLogger(),
+	})
+
+	mux := asynq.NewServeMux()
+	mux.Handle(task.TypeSendEmail, task.NewEmailHandler(a.NotificationClient))
+
+	go func() {
+		logger.Log.Info().Msg("starting worker")
+		if err := srv.Run(mux); err != nil {
+			logger.Log.Fatal().Err(err).Msg("worker error")
+		}
+	}()
 
 	<-ctx.Done()
 
 	logger.Log.Info().Msg("shutting down")
+	srv.Shutdown()
+	if a.NotificationConn != nil {
+		if err := a.NotificationConn.Close(); err != nil {
+			logger.Log.Warn().Err(err).Msg("failed to close notification-service connection")
+		}
+	}
 }
