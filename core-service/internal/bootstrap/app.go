@@ -41,6 +41,8 @@ type App struct {
 	Redis              *redis.Client
 	NotificationConn   *grpc.ClientConn
 	NotificationClient *grpcclient.NotificationClient
+	PaymentConn        *grpc.ClientConn
+	PaymentClient      *grpcclient.PaymentClient
 }
 
 func NewApp() *App {
@@ -71,6 +73,15 @@ func NewApp() *App {
 	}
 	notifClient := grpcclient.NewNotificationClient(notifConn)
 
+	payConn, err := grpc.NewClient(
+		cfg.PaymentServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Str("addr", cfg.PaymentServiceAddr).Msg("failed to connect payment-service")
+	}
+	payClient := grpcclient.NewPaymentClient(payConn)
+
 	logger.Log.Info().Msg("app bootstrapped")
 
 	return &App{
@@ -79,6 +90,8 @@ func NewApp() *App {
 		Redis:              rdb,
 		NotificationConn:   notifConn,
 		NotificationClient: notifClient,
+		PaymentConn:        payConn,
+		PaymentClient:      payClient,
 	}
 }
 
