@@ -79,3 +79,18 @@ proto: ## Generate gRPC code from proto/ via buf
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf bin
+
+## --- Docker ---------------------------------------------------------------
+
+.PHONY: docker-up docker-down docker-logs docker-build
+docker-up: ## Start postgres, redis, migrate, and all services via docker compose
+	docker compose up -d --build
+
+docker-down: ## Stop and remove all docker compose containers
+	docker compose down
+
+docker-logs: ## Tail logs from all docker compose services
+	docker compose logs -f
+
+docker-build: ## Rebuild all service images without starting them
+	docker compose build

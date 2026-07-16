@@ -1,0 +1,6 @@
+.git
+bin
+*.md
+plans
+postman
+.env

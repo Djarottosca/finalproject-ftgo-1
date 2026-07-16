@@ -1,0 +1,110 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-proyekin_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-proyekin_db}?sslmode=disable
+      - up
+    restart: "no"
+
+  payment-service:
+    build:
+      context: .
+      args:
+        CMD_PATH: payment-service/cmd/server
+    env_file: .env
+    environment:
+      PAYMENT_HOST: 0.0.0.0
+    ports:
+      - "${PAYMENT_GRPC_PORT:-9001}:9001"
+
+  notification-service:
+    build:
+      context: .
+      args:
+        CMD_PATH: notification-service/cmd/server
+    env_file: .env
+    environment:
+      NOTIFICATION_HOST: 0.0.0.0
+    ports:
+      - "${NOTIFICATION_PORT:-9002}:9002"
+
+  core-service:
+    build:
+      context: .
+      args:
+        CMD_PATH: core-service/cmd/server
+    env_file: .env
+    environment:
+      CORE_HOST: 0.0.0.0
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      PAYMENT_SERVICE_ADDR: payment-service:9001
+      NOTIFICATION_SERVICE_ADDR: notification-service:9002
+    ports:
+      - "${CORE_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      payment-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+
+  core-worker:
+    build:
+      context: .
+      args:
+        CMD_PATH: core-service/cmd/worker
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      NOTIFICATION_SERVICE_ADDR: notification-service:9002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      notification-service:
+        condition: service_started
+
+volumes:
+  pgdata:
