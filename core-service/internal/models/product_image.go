@@ -8,6 +8,7 @@ type ProductImage struct {
 	ProductID int       `gorm:"column:product_id"`
 	ImageURL  string    `gorm:"column:image_url"`
 	CreatedAt time.Time `gorm:"column:created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
 
 func (ProductImage) TableName() string {

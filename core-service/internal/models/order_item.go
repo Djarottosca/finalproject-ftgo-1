@@ -12,6 +12,7 @@ type OrderItem struct {
 	Qty       int     `gorm:"column:qty;not null"`
 	Subtotal  float64 `gorm:"column:subtotal;not null"`
 	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func (OrderItem) TableName() string {

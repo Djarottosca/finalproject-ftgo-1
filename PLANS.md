@@ -214,11 +214,15 @@ erDiagram
         string email
         string status
         int role_id FK
+        timestamp created_at
+        timestamp updated_at
     }
     ROLES {
         int id PK
         string role_name
         string role_slug
+        timestamp created_at
+        timestamp updated_at
     }
     SUPPLIERS {
         int id PK
@@ -227,6 +231,8 @@ erDiagram
         string supplier_slug
         string address
         string status
+        timestamp created_at
+        timestamp updated_at
     }
     ADDRESSES {
         int id PK
@@ -237,11 +243,15 @@ erDiagram
         string district
         string postal_code
         bool is_primary
+        timestamp created_at
+        timestamp updated_at
     }
     CATEGORIES {
         int id PK
         string category_name
         string category_slug
+        timestamp created_at
+        timestamp updated_at
     }
     PRODUCTS {
         int id PK
@@ -256,16 +266,22 @@ erDiagram
         string discount_type
         decimal discount_amount
         string status
+        timestamp created_at
+        timestamp updated_at
     }
     PRODUCT_IMAGES {
         int id PK
         int product_id FK
         string image_url
+        timestamp created_at
+        timestamp updated_at
     }
     CARTS {
         int user_id FK
         int product_id FK
         int qty
+        timestamp created_at
+        timestamp updated_at
     }
     ORDERS {
         int id PK
@@ -275,6 +291,8 @@ erDiagram
         int total_items
         decimal final_price
         string status
+        timestamp created_at
+        timestamp updated_at
     }
     ORDER_ITEMS {
         int id PK
@@ -283,6 +301,8 @@ erDiagram
         decimal price
         int qty
         decimal subtotal
+        timestamp created_at
+        timestamp updated_at
     }
     PAYMENTS {
         int id PK
@@ -293,6 +313,8 @@ erDiagram
         string payment_link
         string payment_reference
         decimal shipping_cost_estimate
+        timestamp created_at
+        timestamp updated_at
     }
     SHIPMENTS {
         int id PK
@@ -302,6 +324,8 @@ erDiagram
         string tracking_number
         string courier
         decimal actual_shipping_cost
+        timestamp created_at
+        timestamp updated_at
     }
     REVIEWS {
         int id PK
@@ -309,6 +333,8 @@ erDiagram
         int product_id FK
         int rating
         string comment
+        timestamp created_at
+        timestamp updated_at
     }
 ```
 
