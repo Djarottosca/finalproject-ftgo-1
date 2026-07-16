@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -14,17 +13,17 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/payment-service/internal/config"
 	"github.com/Djarottosca/finalproject-ftgo-1/payment-service/internal/grpcserver"
 	"github.com/Djarottosca/finalproject-ftgo-1/payment-service/internal/provider"
+	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
 	paymentv1 "github.com/Djarottosca/finalproject-ftgo-1/proto/payment/v1"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
+	logger.Init()
 
 	// 1. config
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("failed to load config", "err", err)
-		os.Exit(1)
+		logger.Log.Fatal().Err(err).Msg("failed to load config")
 	}
 
 	// 2. provider (simulation / xendit)
@@ -40,26 +39,24 @@ func main() {
 		XenditCountry:     cfg.Xendit.Country,
 	})
 	if err != nil {
-		logger.Error("failed to initialize payment provider", "err", err)
-		os.Exit(1)
+		logger.Log.Fatal().Err(err).Msg("failed to initialize payment provider")
 	}
-	logger.Info("payment provider initialized", "provider", cfg.Provider.Name)
+	logger.Log.Info().Str("provider", cfg.Provider.Name).Msg("payment provider initialized")
 
 	// 3. gRPC server — satu-satunya pintu masuk payment-service
 	grpcServer := grpc.NewServer()
-	paymentv1.RegisterPaymentServiceServer(grpcServer, grpcserver.NewPaymentServer(prov, logger))
+	paymentv1.RegisterPaymentServiceServer(grpcServer, grpcserver.NewPaymentServer(prov, logger.Log))
 	reflection.Register(grpcServer)
 
 	addr := net.JoinHostPort(cfg.App.Host, strconv.Itoa(cfg.App.GRPCPort))
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		logger.Error("failed to listen on gRPC port", "addr", addr, "err", err)
-		os.Exit(1)
+		logger.Log.Fatal().Err(err).Str("addr", addr).Msg("failed to listen on gRPC port")
 	}
 	go func() {
-		logger.Info("gRPC server listening", "addr", addr, "env", cfg.App.Env)
+		logger.Log.Info().Str("addr", addr).Str("env", cfg.App.Env).Msg("gRPC server listening")
 		if err := grpcServer.Serve(lis); err != nil {
-			logger.Error("gRPC server stopped unexpectedly", "err", err)
+			logger.Log.Error().Err(err).Msg("gRPC server stopped unexpectedly")
 		}
 	}()
 
@@ -67,8 +64,8 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	logger.Info("shutdown signal received, shutting down gracefully")
+	logger.Log.Info().Msg("shutdown signal received, shutting down gracefully")
 
 	grpcServer.GracefulStop()
-	logger.Info("payment-service stopped gracefully")
+	logger.Log.Info().Msg("payment-service stopped gracefully")
 }

@@ -3,8 +3,8 @@ package grpcserver
 import (
 	"context"
 	"errors"
-	"log/slog"
 
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -20,10 +20,10 @@ type PaymentServer struct {
 	paymentv1.UnimplementedPaymentServiceServer
 	provider provider.PaymentProvider
 	sim      *provider.Simulation // non-nil cuma kalau provider aktif = simulasi
-	logger   *slog.Logger
+	logger   zerolog.Logger
 }
 
-func NewPaymentServer(p provider.PaymentProvider, logger *slog.Logger) *PaymentServer {
+func NewPaymentServer(p provider.PaymentProvider, logger zerolog.Logger) *PaymentServer {
 	s := &PaymentServer{provider: p, logger: logger}
 	// Type-assert sekali di sini. MarkPaid ada di LUAR interface PaymentProvider,
 	// jadi cuma kesimpen kalau provider-nya emang simulasi.
@@ -48,7 +48,7 @@ func (s *PaymentServer) CreatePayment(ctx context.Context, req *paymentv1.Create
 
 	inv, err := s.provider.CreateInvoice(ctx, params)
 	if err != nil {
-		s.logger.Error("failed to create payment", "order_id", req.GetOrderId(), "err", err)
+		s.logger.Error().Err(err).Int64("order_id", req.GetOrderId()).Msg("failed to create payment")
 		return nil, status.Error(codes.Internal, "failed to create payment")
 	}
 
@@ -67,7 +67,7 @@ func (s *PaymentServer) GetPaymentStatus(ctx context.Context, req *paymentv1.Get
 		if errors.Is(err, provider.ErrInvoiceNotFound) {
 			return nil, status.Error(codes.NotFound, "invoice not found")
 		}
-		s.logger.Error("failed to get payment status", "reference", req.GetPaymentReference(), "err", err)
+		s.logger.Error().Err(err).Str("reference", req.GetPaymentReference()).Msg("failed to get payment status")
 		return nil, status.Error(codes.Internal, "failed to get payment status")
 	}
 
@@ -91,14 +91,11 @@ func (s *PaymentServer) SimulatePayment(ctx context.Context, req *paymentv1.Simu
 		if errors.Is(err, provider.ErrInvoiceNotFound) {
 			return nil, status.Error(codes.NotFound, "invoice not found")
 		}
-		s.logger.Error("failed to simulate payment", "reference", req.GetPaymentReference(), "err", err)
+		s.logger.Error().Err(err).Str("reference", req.GetPaymentReference()).Msg("failed to simulate payment")
 		return nil, status.Error(codes.Internal, "failed to simulate payment")
 	}
 
-	s.logger.Info("payment simulated",
-		"order_id", inv.OrderID,
-		"reference", inv.Reference,
-	)
+	s.logger.Info().Int64("order_id", inv.OrderID).Str("reference", inv.Reference).Msg("payment simulated")
 
 	return &paymentv1.SimulatePaymentResponse{
 		PaymentReference: inv.Reference,

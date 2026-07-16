@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -38,8 +38,8 @@ func (f *fakeProvider) GetInvoice(ctx context.Context, reference string) (provid
 	return f.invoice, nil
 }
 
-func discardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+func discardLogger() zerolog.Logger {
+	return zerolog.New(io.Discard)
 }
 
 func TestCreatePayment_MappingBenar(t *testing.T) {
