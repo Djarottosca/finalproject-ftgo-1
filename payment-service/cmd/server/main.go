@@ -57,7 +57,7 @@ func main() {
 		os.Exit(1)
 	}
 	go func() {
-		logger.Info("gRPC server listening", "addr", addr)
+		logger.Info("gRPC server listening", "addr", addr, "env", cfg.App.Env)
 		if err := grpcServer.Serve(lis); err != nil {
 			logger.Error("gRPC server stopped unexpectedly", "err", err)
 		}
