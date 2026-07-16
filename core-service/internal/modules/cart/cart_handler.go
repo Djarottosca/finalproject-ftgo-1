@@ -12,20 +12,11 @@ import (
 )
 
 type Handler struct {
-	service *Service
+	service Service
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
-}
-
-// RegisterRoutes: g AuthMiddleware
-func (h *Handler) RegisterRoutes(g *echo.Group) {
-	cg := g.Group("/cart")
-	cg.GET("", h.GetCart)
-	cg.POST("/items", h.AddItem)
-	cg.PUT("/items/:product_id", h.UpdateItem)
-	cg.DELETE("/items/:product_id", h.RemoveItem)
 }
 
 func (h *Handler) GetCart(c echo.Context) error {

@@ -21,16 +21,25 @@ type productLookup interface {
 	FindByID(ctx context.Context, id uint64) (*models.Product, error)
 }
 
-type Service struct {
+// Service defines the cart use cases exposed to the handler layer.
+type Service interface {
+	AddItem(ctx context.Context, userID int, req AddItemRequest) (*CartResponse, error)
+	UpdateItem(ctx context.Context, userID int, productID uint64, req UpdateItemRequest) (*CartResponse, error)
+	RemoveItem(ctx context.Context, userID int, productID uint64) (*CartResponse, error)
+	GetCart(ctx context.Context, userID int) (*CartResponse, error)
+}
+
+type service struct {
 	repo     Repository
 	products productLookup
 }
 
-func NewService(repo Repository, products productLookup) *Service {
-	return &Service{repo: repo, products: products}
+// NewService returns the Service implementation.
+func NewService(repo Repository, products productLookup) Service {
+	return &service{repo: repo, products: products}
 }
 
-func (s *Service) AddItem(ctx context.Context, userID int, req AddItemRequest) (*CartResponse, error) {
+func (s *service) AddItem(ctx context.Context, userID int, req AddItemRequest) (*CartResponse, error) {
 	product, err := s.getSellableProduct(ctx, req.ProductID)
 	if err != nil {
 		return nil, err
@@ -45,7 +54,7 @@ func (s *Service) AddItem(ctx context.Context, userID int, req AddItemRequest) (
 	return s.GetCart(ctx, userID)
 }
 
-func (s *Service) UpdateItem(ctx context.Context, userID int, productID uint64, req UpdateItemRequest) (*CartResponse, error) {
+func (s *service) UpdateItem(ctx context.Context, userID int, productID uint64, req UpdateItemRequest) (*CartResponse, error) {
 	product, err := s.getSellableProduct(ctx, productID)
 	if err != nil {
 		return nil, err
@@ -64,7 +73,7 @@ func (s *Service) UpdateItem(ctx context.Context, userID int, productID uint64, 
 	return s.GetCart(ctx, userID)
 }
 
-func (s *Service) RemoveItem(ctx context.Context, userID int, productID uint64) (*CartResponse, error) {
+func (s *service) RemoveItem(ctx context.Context, userID int, productID uint64) (*CartResponse, error) {
 	rows, err := s.repo.Delete(ctx, userID, productID)
 	if err != nil {
 		return nil, fmt.Errorf("gagal menghapus item: %w", err)
@@ -75,7 +84,7 @@ func (s *Service) RemoveItem(ctx context.Context, userID int, productID uint64) 
 	return s.GetCart(ctx, userID)
 }
 
-func (s *Service) GetCart(ctx context.Context, userID int) (*CartResponse, error) {
+func (s *service) GetCart(ctx context.Context, userID int) (*CartResponse, error) {
 	carts, err := s.repo.FindAllByUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("gagal mengambil keranjang: %w", err)
@@ -110,7 +119,7 @@ func (s *Service) GetCart(ctx context.Context, userID int) (*CartResponse, error
 }
 
 // getSellableProduct: produk ada, statusnya "active"
-func (s *Service) getSellableProduct(ctx context.Context, productID uint64) (*models.Product, error) {
+func (s *service) getSellableProduct(ctx context.Context, productID uint64) (*models.Product, error) {
 	product, err := s.products.FindByID(ctx, productID)
 	if err != nil {
 		return nil, ErrProductNotFound
