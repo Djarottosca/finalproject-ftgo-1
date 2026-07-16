@@ -9,28 +9,20 @@ import (
 )
 
 type Config struct {
-	App           AppConfig
-	Database      DatabaseConfig
-	Redis         RedisConfig
-	Notification  NotificationConfig
-	JWTSecret     string
+	App      AppConfig
+	Database DatabaseConfig
+	Redis    RedisConfig
 
-	// PaymentServiceAddr is the gRPC address of payment-service. It differs
-	// per environment (localhost in dev, a service name in deploy), so it's
-	// config, never hardcoded.
-	PaymentServiceAddr string
-}
+	// PaymentServiceAddr and NotificationServiceAddr are the gRPC addresses
+	// of the payment/notification services (as seen by core-service, not
+	// their own bind address), so they're separate env keys from each
+	// service's own PAYMENT_*/NOTIFICATION_* config.
+	PaymentServiceAddr      string
+	NotificationServiceAddr string
 
-// NotificationConfig: alamat gRPC notification-service, dibaca dari
-// NOTIFICATION_HOST/NOTIFICATION_PORT di .env (bukan NOTIFICATION_ENV/PORT
-// milik service itu sendiri, ini alamat buat core konek ke sana).
-type NotificationConfig struct {
-	Host string
-	Port int
-}
+	JWTSecret string
 
-func (c *NotificationConfig) Addr() string {
-	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+	RajaOngkir RajaOngkirConfig
 }
 
 type AppConfig struct {
@@ -67,6 +59,11 @@ type RedisConfig struct {
 	DB       int
 }
 
+type RajaOngkirConfig struct {
+	BaseURL string
+	ApiKey  string
+}
+
 func Load() (*Config, error) {
 	v := viper.New()
 
@@ -86,8 +83,7 @@ func Load() (*Config, error) {
 	v.SetDefault("REDIS_PORT", 6379)
 	v.SetDefault("REDIS_DB", 0)
 	v.SetDefault("PAYMENT_SERVICE_ADDR", "localhost:9001")
-	v.SetDefault("NOTIFICATION_HOST", "localhost")
-	v.SetDefault("NOTIFICATION_PORT", 9002)
+	v.SetDefault("NOTIFICATION_SERVICE_ADDR", "localhost:9002")
 
 	cfg := &Config{
 		App: AppConfig{
@@ -109,12 +105,13 @@ func Load() (*Config, error) {
 			Password: v.GetString("REDIS_PASSWORD"),
 			DB:       v.GetInt("REDIS_DB"),
 		},
-		PaymentServiceAddr: v.GetString("PAYMENT_SERVICE_ADDR"),
-		Notification: NotificationConfig{
-			Host: v.GetString("NOTIFICATION_HOST"),
-			Port: v.GetInt("NOTIFICATION_PORT"),
+		PaymentServiceAddr:      v.GetString("PAYMENT_SERVICE_ADDR"),
+		NotificationServiceAddr: v.GetString("NOTIFICATION_SERVICE_ADDR"),
+		JWTSecret:               v.GetString("JWT_SECRET"),
+		RajaOngkir: RajaOngkirConfig{
+			BaseURL: v.GetString("RAJAONGKIR_BASE_URL"),
+			ApiKey:  v.GetString("RAJAONGKIR_API_KEY"),
 		},
-		JWTSecret: v.GetString("JWT_SECRET"),
 	}
 
 	return cfg, nil
