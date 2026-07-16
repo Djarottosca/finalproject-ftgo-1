@@ -40,7 +40,7 @@ func (r *gormRepository) FindByID(id int) (*models.User, error) {
 
 func (r *gormRepository) FindByUsername(username string) (*models.User, error) {
 	var user models.User
-	if err := r.db.Where("username = ?", username).First(&user).Error; err != nil {
+	if err := r.db.Preload("Role").Where("username = ?", username).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
