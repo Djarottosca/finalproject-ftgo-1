@@ -29,6 +29,7 @@ type Service interface {
 	Detail(ctx context.Context, slug string) (*ProductDetailResponse, error)
 	Create(ctx context.Context, supplierID int, req CreateProductRequest) (*ProductDetailResponse, error)
 	ListMine(ctx context.Context, supplierID int) ([]ProductResponse, error)
+	AdminList(ctx context.Context) ([]ProductResponse, error)
 	Update(ctx context.Context, supplierID, productID int, req UpdateProductRequest) (*ProductDetailResponse, error)
 	SetDiscount(ctx context.Context, supplierID, productID int, req DiscountRequest) (*ProductDetailResponse, error)
 	AdjustStock(ctx context.Context, supplierID, productID int, req StockAdjustRequest) (*ProductDetailResponse, error)
@@ -142,6 +143,21 @@ func (s *service) ListMine(ctx context.Context, supplierID int) ([]ProductRespon
 	products, err := s.repo.FindAllBySupplier(ctx, supplierID)
 	if err != nil {
 		return nil, fmt.Errorf("query supplier products: %w", err)
+	}
+
+	items := make([]ProductResponse, 0, len(products))
+	for _, p := range products {
+		items = append(items, toProductResponse(p))
+	}
+	return items, nil
+}
+
+// AdminList returns every product across all suppliers, any status —
+// unscoped oversight for admins.
+func (s *service) AdminList(ctx context.Context) ([]ProductResponse, error) {
+	products, err := s.repo.FindAllAdmin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("query all products: %w", err)
 	}
 
 	items := make([]ProductResponse, 0, len(products))

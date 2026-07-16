@@ -21,6 +21,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/external/rajaongkir"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/grpcclient"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/address"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/admin"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/auth"
@@ -113,19 +114,22 @@ func (a *App) RunServer() {
 	e.Use(middleware.RequestLoggerMiddleware())
 
 	authManager := jwt.NewAuthManager(a.Config.JWTSecret)
-	authMW := middleware.AuthMiddleware(authManager)
-	adminMW := middleware.RequireRole("admin")
-	supplierMW := middleware.RequireRole("supplier")
+	tokenBlacklist := cache.NewTokenBlacklist(a.Redis)
+	authMW := middleware.AuthMiddleware(authManager, tokenBlacklist)
+	userMW := middleware.RequireRole(models.RoleUser)
+	adminMW := middleware.RequireRole(models.RoleAdmin)
+	supplierMW := middleware.RequireRole(models.RoleSupplier)
+	anyRoleMW := middleware.RequireRole(models.RoleUser, models.RoleSupplier, models.RoleAdmin)
 
 	userRepo := user.NewRepository(a.Database)
 	userService := user.NewService(userRepo)
 	userHandler := user.NewHandler(userService)
 
-	authService := auth.NewService(userRepo, authManager)
+	authService := auth.NewService(userRepo, a.Database, authManager, tokenBlacklist)
 	authHandler := auth.NewHandler(authService)
 
 	supplierRepo := supplier.NewRepository(a.Database)
-	supplierService := supplier.NewService(supplierRepo)
+	supplierService := supplier.NewService(supplierRepo, a.Database, authManager)
 	supplierHandler := supplier.NewHandler(supplierService)
 
 	productRepo := product.NewRepository(a.Database)
@@ -169,36 +173,39 @@ func (a *App) RunServer() {
 
 	v1 := e.Group("/api/v1")
 
-	// public routes — no auth required
-	v1.POST("/auth/login", authHandler.Login)
-	v1.POST("/users", userHandler.Create)
+	// account routes — self-service, any authenticated role
+	v1.GET("/users/me", userHandler.Me, authMW, anyRoleMW)
+	v1.PUT("/users/me", userHandler.UpdateMe, authMW, anyRoleMW)
+
+	// user routes — auth, storefront browsing, cart, checkout, payments, shipping, reviews
+	v1.POST("/user/register", authHandler.UserRegister)
+	v1.POST("/user/login", authHandler.UserLogin)
+	v1.POST("/user/logout", authHandler.Logout, authMW, userMW)
 	v1.GET("/products", productHandler.List)
 	v1.GET("/products/:slug", productHandler.Detail)
 	v1.GET("/products/:id/reviews", reviewHandler.List)
+	v1.POST("/products/:id/reviews", reviewHandler.Create, authMW, userMW)
+	v1.POST("/addresses", addressHandler.Create, authMW, userMW)
+	v1.GET("/addresses", addressHandler.List, authMW, userMW)
+	v1.PUT("/addresses/:id", addressHandler.Update, authMW, userMW)
+	v1.DELETE("/addresses/:id", addressHandler.Delete, authMW, userMW)
+	v1.GET("/cart", cartHandler.GetCart, authMW, userMW)
+	v1.POST("/cart/items", cartHandler.AddItem, authMW, userMW)
+	v1.PUT("/cart/items/:product_id", cartHandler.UpdateItem, authMW, userMW)
+	v1.DELETE("/cart/items/:product_id", cartHandler.RemoveItem, authMW, userMW)
+	v1.POST("/orders/checkout", orderHandler.Checkout, authMW, userMW)
+	v1.GET("/orders", orderHandler.ListMine, authMW, userMW)
+	v1.GET("/orders/:id", orderHandler.GetMine, authMW, userMW)
+	v1.POST("/payments", paymentHandler.Create, authMW, userMW)
+	v1.GET("/payments/:orderId", paymentHandler.GetStatus, authMW, userMW)
+	v1.GET("/shipping/destinations", shippingHandler.SearchDestinations, authMW, userMW)
+	v1.POST("/shipping/cost", shippingHandler.CalculateCost, authMW, userMW)
 
-	// authenticated routes — any logged-in role (self-service)
-	v1.POST("/suppliers", supplierHandler.Register, authMW)
-	v1.GET("/suppliers/:id", supplierHandler.Get, authMW)
-	v1.GET("/users/me", userHandler.Me, authMW)
-	v1.PUT("/users/me", userHandler.UpdateMe, authMW)
-	v1.POST("/addresses", addressHandler.Create, authMW)
-	v1.GET("/addresses", addressHandler.List, authMW)
-	v1.PUT("/addresses/:id", addressHandler.Update, authMW)
-	v1.DELETE("/addresses/:id", addressHandler.Delete, authMW)
-	v1.GET("/cart", cartHandler.GetCart, authMW)
-	v1.POST("/cart/items", cartHandler.AddItem, authMW)
-	v1.PUT("/cart/items/:product_id", cartHandler.UpdateItem, authMW)
-	v1.DELETE("/cart/items/:product_id", cartHandler.RemoveItem, authMW)
-	v1.POST("/orders/checkout", orderHandler.Checkout, authMW)
-	v1.GET("/orders", orderHandler.ListMine, authMW)
-	v1.GET("/orders/:id", orderHandler.GetMine, authMW)
-	v1.POST("/payments", paymentHandler.Create, authMW)
-	v1.GET("/payments/:orderId", paymentHandler.GetStatus, authMW)
-	v1.GET("/shipping/destinations", shippingHandler.SearchDestinations, authMW)
-	v1.POST("/shipping/cost", shippingHandler.CalculateCost, authMW)
-	v1.POST("/products/:id/reviews", reviewHandler.Create, authMW)
-
-	// supplier routes
+	// supplier routes — auth, registration, catalog & order fulfillment
+	v1.POST("/supplier/register", supplierHandler.Register)
+	v1.POST("/supplier/login", authHandler.SupplierLogin)
+	v1.POST("/supplier/logout", authHandler.Logout, authMW, supplierMW)
+	v1.GET("/suppliers/:id", supplierHandler.Get, authMW, anyRoleMW)
 	v1.GET("/supplier/products", productHandler.ListMine, authMW, supplierMW)
 	v1.POST("/supplier/products", productHandler.Create, authMW, supplierMW)
 	v1.PUT("/supplier/products/:id", productHandler.Update, authMW, supplierMW)
@@ -211,7 +218,10 @@ func (a *App) RunServer() {
 	v1.GET("/supplier/orders", orderHandler.ListForSupplier, authMW, supplierMW)
 	v1.PATCH("/supplier/orders/:id/status", orderHandler.UpdateStatus, authMW, supplierMW)
 
-	// admin routes
+	// admin routes — auth, platform oversight
+	v1.POST("/admin/login", authHandler.AdminLogin)
+	v1.POST("/admin/logout", authHandler.Logout, authMW, adminMW)
+	v1.POST("/admin/users", userHandler.AdminCreate, authMW, adminMW)
 	v1.GET("/admin/users", userHandler.AdminList, authMW, adminMW)
 	v1.GET("/admin/users/:id", userHandler.AdminGetByID, authMW, adminMW)
 	v1.PUT("/admin/users/:id", userHandler.AdminUpdate, authMW, adminMW)
@@ -221,6 +231,7 @@ func (a *App) RunServer() {
 	v1.GET("/admin/reports/stock", adminHandler.StockReport, authMW, adminMW)
 	v1.GET("/admin/reports/sales", adminHandler.SalesReport, authMW, adminMW)
 	v1.GET("/admin/transactions", adminHandler.Transactions, authMW, adminMW)
+	v1.GET("/admin/products", productHandler.AdminList, authMW, adminMW)
 
 	go func() {
 		addr := a.Config.App.Host + ":" + strconv.Itoa(a.Config.App.Port)

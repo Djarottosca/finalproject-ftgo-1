@@ -31,6 +31,9 @@ func (m *mockProductRepo) FindByID(_ context.Context, id int) (*models.Product, 
 func (m *mockProductRepo) FindAllBySupplier(context.Context, int) ([]models.Product, error) {
 	return nil, nil
 }
+func (m *mockProductRepo) FindAllAdmin(context.Context) ([]models.Product, error) {
+	return nil, nil
+}
 func (m *mockProductRepo) Create(context.Context, *models.Product) error { return nil }
 func (m *mockProductRepo) Update(context.Context, *models.Product) error { return nil }
 func (m *mockProductRepo) Delete(context.Context, int) error             { return nil }

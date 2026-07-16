@@ -17,7 +17,7 @@ var ErrNotFound = errors.New("user not found")
 // Admin* methods operate on an arbitrary user by ID and are reserved for
 // admin-only routes.
 type Service interface {
-	Create(ctx context.Context, req CreateUserRequest) (*UserResponse, error)
+	AdminCreate(ctx context.Context, req CreateUserRequest) (*UserResponse, error)
 	Me(ctx context.Context, id int) (*UserResponse, error)
 	UpdateMe(ctx context.Context, id int, req UpdateProfileRequest) (*UserResponse, error)
 	AdminList(ctx context.Context) ([]UserResponse, error)
@@ -35,7 +35,11 @@ func NewService(repo Repository) Service {
 	return &service{repo: repo}
 }
 
-func (s *service) Create(ctx context.Context, req CreateUserRequest) (*UserResponse, error) {
+// AdminCreate creates a user account with an arbitrary role_id — admin-only,
+// since letting anyone pick their own role would let a caller self-declare
+// as admin. Self-signup goes through auth.RegisterUser (role=user, fixed)
+// or supplier.Register (role=supplier, fixed) instead.
+func (s *service) AdminCreate(ctx context.Context, req CreateUserRequest) (*UserResponse, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err

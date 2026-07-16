@@ -18,13 +18,16 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) Create(c echo.Context) error {
+// AdminCreate handles POST /admin/users. Only path that can set an
+// arbitrary role_id — self-signup routes (auth.RegisterUser,
+// supplier.Register) always fix the role themselves.
+func (h *Handler) AdminCreate(c echo.Context) error {
 	var req CreateUserRequest
 	if err := c.Bind(&req); err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
 
-	res, err := h.service.Create(c.Request().Context(), req)
+	res, err := h.service.AdminCreate(c.Request().Context(), req)
 	if err != nil {
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to create user")
 	}

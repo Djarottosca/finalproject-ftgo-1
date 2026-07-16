@@ -18,17 +18,21 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
+// Register handles POST /supplier/register — public self-signup. Creates the
+// backing user account (role=supplier) and the supplier profile together,
+// no prior /admin/users or /user/register call needed.
 func (h *Handler) Register(c echo.Context) error {
-	userID, _ := c.Get("user_id").(int)
-
 	var req RegisterRequest
 	if err := c.Bind(&req); err != nil {
 		return response.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 	}
+	if err := c.Validate(&req); err != nil {
+		return response.ErrorResponse(c, http.StatusBadRequest, err.Error())
+	}
 
-	res, err := h.service.Register(c.Request().Context(), userID, req)
+	res, err := h.service.Register(c.Request().Context(), req)
 	if err != nil {
-		if errors.Is(err, ErrAlreadyExists) {
+		if errors.Is(err, ErrUsernameTaken) {
 			return response.ErrorResponse(c, http.StatusConflict, err.Error())
 		}
 		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to register supplier")

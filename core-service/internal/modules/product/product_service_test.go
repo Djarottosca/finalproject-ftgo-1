@@ -58,6 +58,10 @@ func (m *mockRepository) FindAllBySupplier(_ context.Context, supplierID int) ([
 	return result, nil
 }
 
+func (m *mockRepository) FindAllAdmin(_ context.Context) ([]models.Product, error) {
+	return m.products, nil
+}
+
 func (m *mockRepository) Create(_ context.Context, p *models.Product) error {
 	m.products = append(m.products, *p)
 	return nil

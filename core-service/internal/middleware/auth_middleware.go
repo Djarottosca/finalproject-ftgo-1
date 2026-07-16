@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -10,7 +11,14 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/response"
 )
 
-func AuthMiddleware(authManager *jwt.AuthManager) echo.MiddlewareFunc {
+// blacklist is the subset of cache.TokenBlacklist this middleware needs —
+// kept as an interface so middleware doesn't import the cache package
+// directly and stays easy to test.
+type blacklist interface {
+	Contains(ctx context.Context, token string) (bool, error)
+}
+
+func AuthMiddleware(authManager *jwt.AuthManager, bl blacklist) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			tokenString := c.Request().Header.Get("Authorization")
@@ -29,8 +37,13 @@ func AuthMiddleware(authManager *jwt.AuthManager) echo.MiddlewareFunc {
 				return response.ErrorResponse(c, http.StatusUnauthorized, "token tidak valid")
 			}
 
+			if revoked, err := bl.Contains(c.Request().Context(), tokenString); err == nil && revoked {
+				return response.ErrorResponse(c, http.StatusUnauthorized, "token sudah logout")
+			}
+
 			c.Set("user_id", claims.UserID)
 			c.Set("role", claims.Role)
+			c.Set("raw_token", tokenString)
 
 			return next(c)
 		}

@@ -21,6 +21,7 @@ type Repository interface {
 	FindBySlug(ctx context.Context, slug string) (*models.Product, error)
 	FindByID(ctx context.Context, id int) (*models.Product, error)
 	FindAllBySupplier(ctx context.Context, supplierID int) ([]models.Product, error)
+	FindAllAdmin(ctx context.Context) ([]models.Product, error)
 	Create(ctx context.Context, product *models.Product) error
 	Update(ctx context.Context, product *models.Product) error
 	Delete(ctx context.Context, id int) error
@@ -90,6 +91,20 @@ func (r *gormRepository) FindAllBySupplier(ctx context.Context, supplierID int) 
 	err := r.db.WithContext(ctx).
 		Preload("Category").
 		Where("supplier_id = ?", supplierID).
+		Order("created_at DESC").
+		Find(&products).Error
+	if err != nil {
+		return nil, err
+	}
+	return products, nil
+}
+
+// FindAllAdmin returns every product across all suppliers, any status —
+// for admin oversight, unscoped by ownership.
+func (r *gormRepository) FindAllAdmin(ctx context.Context) ([]models.Product, error) {
+	var products []models.Product
+	err := r.db.WithContext(ctx).
+		Preload("Category").
 		Order("created_at DESC").
 		Find(&products).Error
 	if err != nil {

@@ -196,6 +196,17 @@ func (h *Handler) Delete(c echo.Context) error {
 	return response.SuccessResponse(c, http.StatusOK, "product deleted", nil)
 }
 
+// AdminList handles GET /admin/products. Returns every product across all
+// suppliers, unscoped — admin oversight, not the supplier's own listing.
+func (h *Handler) AdminList(c echo.Context) error {
+	res, err := h.service.AdminList(c.Request().Context())
+	if err != nil {
+		return response.ErrorResponse(c, http.StatusInternalServerError, "failed to list products")
+	}
+
+	return response.SuccessResponse(c, http.StatusOK, "ok", res)
+}
+
 func (h *Handler) mutationError(c echo.Context, err error, fallback string) error {
 	switch {
 	case errors.Is(err, ErrProductNotFound):
