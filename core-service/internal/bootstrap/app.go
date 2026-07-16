@@ -11,11 +11,14 @@ import (
 	echo "github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	redis "github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/cache"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/config"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/database"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/grpcclient"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/middleware"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/address"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/admin"
@@ -32,9 +35,11 @@ import (
 )
 
 type App struct {
-	Config   *config.Config
-	Database *gorm.DB
-	Redis    *redis.Client
+	Config             *config.Config
+	Database           *gorm.DB
+	Redis              *redis.Client
+	NotificationConn   *grpc.ClientConn
+	NotificationClient *grpcclient.NotificationClient
 }
 
 func NewApp() *App {
@@ -55,12 +60,24 @@ func NewApp() *App {
 		logger.Log.Fatal().Err(err).Msg("failed to connect redis")
 	}
 
+	// jalan di jaringan internal/dev, belum ada TLS antar service.
+	notifConn, err := grpc.NewClient(
+		cfg.Notification.Addr(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Str("addr", cfg.Notification.Addr()).Msg("failed to connect notification-service")
+	}
+	notifClient := grpcclient.NewNotificationClient(notifConn)
+
 	logger.Log.Info().Msg("app bootstrapped")
 
 	return &App{
-		Config:   cfg,
-		Database: db,
-		Redis:    rdb,
+		Config:             cfg,
+		Database:           db,
+		Redis:              rdb,
+		NotificationConn:   notifConn,
+		NotificationClient: notifClient,
 	}
 }
 
@@ -105,7 +122,7 @@ func (a *App) RunServer() {
 	cartHandler := cart.NewHandler(cart.NewService(cartRepo, productRepo))
 
 	orderRepo := order.NewRepository(a.Database)
-	orderHandler := order.NewHandler(order.NewService(orderRepo, cartRepo), supplierRepo)
+	orderHandler := order.NewHandler(order.NewService(orderRepo, cartRepo, userRepo, a.NotificationClient), supplierRepo)
 
 	adminRepo := admin.NewRepository(a.Database)
 	adminHandler := admin.NewHandler(admin.NewService(adminRepo))
@@ -168,6 +185,11 @@ func (a *App) RunServer() {
 	logger.Log.Info().Msg("shutting down")
 	if err := e.Shutdown(context.Background()); err != nil {
 		logger.Log.Fatal().Err(err).Msg("server shutdown error")
+	}
+	if a.NotificationConn != nil {
+		if err := a.NotificationConn.Close(); err != nil {
+			logger.Log.Warn().Err(err).Msg("failed to close notification-service connection")
+		}
 	}
 }
 
