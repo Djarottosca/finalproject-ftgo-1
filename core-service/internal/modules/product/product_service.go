@@ -1,190 +1,129 @@
 package product
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
-	"github.com/Djarottosca/finalproject-ftgo-1/pkg/slug"
 )
 
-var (
-	ErrNotFound        = errors.New("product not found")
-	ErrForbidden       = errors.New("product does not belong to this supplier")
-	ErrInvalidDiscount = errors.New("discount_type must be percentage, fixed, or empty")
-	ErrInvalidStock    = errors.New("resulting stock cannot be negative")
-)
+var ErrProductNotFound = errors.New("produk tidak ditemukan")
 
-// Service defines the product use cases exposed to the handler layer.
-type Service interface {
-	Create(supplierID int, req CreateProductRequest) (*ProductResponse, error)
-	Get(id int) (*ProductResponse, error)
-	List(filter ListFilter) ([]ProductResponse, error)
-	Update(supplierID, productID int, req UpdateProductRequest) (*ProductResponse, error)
-	SetDiscount(supplierID, productID int, req DiscountRequest) (*ProductResponse, error)
-	AdjustStock(supplierID, productID int, req StockAdjustRequest) (*ProductResponse, error)
-	Delete(supplierID, productID int) error
+// cacheTTL (60 detik)
+const cacheTTL = 60 * time.Second
+
+type Service struct {
+	repo  Repository
+	cache Cache
 }
 
-type service struct {
-	repo Repository
+func NewService(repo Repository, cache Cache) *Service {
+	return &Service{repo: repo, cache: cache}
 }
 
-// NewService returns the Service implementation backed by the given Repository.
-func NewService(repo Repository) Service {
-	return &service{repo: repo}
-}
+// List menerapkan cache-aside: cek cache dulu, kalau miss baru query
+func (s *Service) List(ctx context.Context, req ListRequest) (*ListResponse, error) {
+	cacheKey := fmt.Sprintf("products:list:kw=%s:cat=%d:page=%d:limit=%d", req.Keyword, req.CategoryID, req.Page, req.Limit)
 
-func (s *service) Create(supplierID int, req CreateProductRequest) (*ProductResponse, error) {
-	var description *string
-	if req.Description != "" {
-		description = &req.Description
+	if cached, err := s.cache.Get(ctx, cacheKey); err == nil {
+		var resp ListResponse
+		if jsonErr := json.Unmarshal([]byte(cached), &resp); jsonErr == nil {
+			return &resp, nil
+		}
+		//gagal unmarshal (format cache lama berubah), abaikan cache dan lanjut query database seperti biasa
+
 	}
 
-	product := &models.Product{
-		ProductName: req.ProductName,
-		ProductSlug: slug.Generate(req.ProductName),
-		CategoryID:  req.CategoryID,
-		Unit:        req.Unit,
-		Stock:       req.Stock,
-		SupplierID:  supplierID,
-		Price:       req.Price,
-		Description: description,
-		Status:      models.ProductStatusActive,
-	}
-	if err := s.repo.Create(product); err != nil {
-		return nil, err
+	filter := ListFilter{
+		Keyword:    req.Keyword,
+		CategoryID: req.CategoryID,
+		Page:       req.Page,
+		Limit:      req.Limit,
 	}
 
-	return toResponse(product), nil
+	products, total, err := s.repo.FindAll(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("query produk: %w", err)
+	}
+
+	items := make([]ProductResponse, 0, len(products))
+	for _, p := range products {
+		items = append(items, toProductResponse(p))
+	}
+
+	resp := &ListResponse{
+		Items:      items,
+		Page:       req.Page,
+		Limit:      req.Limit,
+		TotalItems: total,
+	}
+
+	if payload, jsonErr := json.Marshal(resp); jsonErr == nil {
+		_ = s.cache.Set(ctx, cacheKey, string(payload), cacheTTL)
+	}
+
+	return resp, nil
 }
 
-func (s *service) Get(id int) (*ProductResponse, error) {
-	product, err := s.repo.FindByID(id)
+func (s *Service) Detail(ctx context.Context, slug string) (*ProductDetailResponse, error) {
+	cacheKey := fmt.Sprintf("products:detail:%s", slug)
+
+	if cached, err := s.cache.Get(ctx, cacheKey); err == nil {
+		var resp ProductDetailResponse
+		if jsonErr := json.Unmarshal([]byte(cached), &resp); jsonErr == nil {
+			return &resp, nil
+		}
+	}
+
+	p, err := s.repo.FindBySlug(ctx, slug)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
+			return nil, ErrProductNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("query produk: %w", err)
 	}
 
-	return toResponse(product), nil
+	resp := toProductDetailResponse(*p)
+
+	if payload, jsonErr := json.Marshal(resp); jsonErr == nil {
+		_ = s.cache.Set(ctx, cacheKey, string(payload), cacheTTL)
+	}
+
+	return &resp, nil
 }
 
-func (s *service) List(filter ListFilter) ([]ProductResponse, error) {
-	products, err := s.repo.List(filter)
-	if err != nil {
-		return nil, err
+func toProductResponse(p models.Product) ProductResponse {
+	return ProductResponse{
+		ID:             p.ID,
+		ProductName:    p.ProductName,
+		ProductSlug:    p.ProductSlug,
+		CategoryID:     p.CategoryID,
+		CategoryName:   p.Category.CategoryName,
+		Unit:           p.Unit,
+		Stock:          p.Stock,
+		Price:          p.Price,
+		DiscountType:   p.DiscountType,
+		DiscountAmount: p.DiscountAmount,
+		FinalPrice:     p.FinalPrice(),
+		Status:         p.Status,
 	}
-
-	res := make([]ProductResponse, 0, len(products))
-	for _, product := range products {
-		res = append(res, *toResponse(&product))
-	}
-	return res, nil
 }
 
-func (s *service) Update(supplierID, productID int, req UpdateProductRequest) (*ProductResponse, error) {
-	product, err := s.repo.FindByID(productID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-	if product.SupplierID != supplierID {
-		return nil, ErrForbidden
+func toProductDetailResponse(p models.Product) ProductDetailResponse {
+	images := make([]string, 0, len(p.Images))
+	for _, img := range p.Images {
+		images = append(images, img.ImageURL)
 	}
 
-	product.ProductName = req.ProductName
-	product.CategoryID = req.CategoryID
-	product.Unit = req.Unit
-	product.Price = req.Price
-
-	var description *string
-	if req.Description != "" {
-		description = &req.Description
+	return ProductDetailResponse{
+		ProductResponse: toProductResponse(p),
+		Description:     p.Description,
+		SupplierID:      p.SupplierID,
+		Images:          images,
 	}
-	product.Description = description
-
-	if err := s.repo.Update(product); err != nil {
-		return nil, err
-	}
-
-	return toResponse(product), nil
-}
-
-func (s *service) SetDiscount(supplierID, productID int, req DiscountRequest) (*ProductResponse, error) {
-	product, err := s.repo.FindByID(productID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-	if product.SupplierID != supplierID {
-		return nil, ErrForbidden
-	}
-
-	switch req.DiscountType {
-	case "":
-		product.DiscountType = nil
-		product.DiscountAmount = nil
-	case models.ProductDiscountPercentage, models.ProductDiscountFixed:
-		if req.DiscountType == models.ProductDiscountPercentage && req.DiscountAmount > 100 {
-			return nil, ErrInvalidDiscount
-		}
-		discountType := req.DiscountType
-		amount := req.DiscountAmount
-		product.DiscountType = &discountType
-		product.DiscountAmount = &amount
-	default:
-		return nil, ErrInvalidDiscount
-	}
-
-	if err := s.repo.Update(product); err != nil {
-		return nil, err
-	}
-
-	return toResponse(product), nil
-}
-
-func (s *service) AdjustStock(supplierID, productID int, req StockAdjustRequest) (*ProductResponse, error) {
-	product, err := s.repo.FindByID(productID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-	if product.SupplierID != supplierID {
-		return nil, ErrForbidden
-	}
-
-	newStock := product.Stock + req.Delta
-	if newStock < 0 {
-		return nil, ErrInvalidStock
-	}
-	product.Stock = newStock
-
-	if err := s.repo.Update(product); err != nil {
-		return nil, err
-	}
-
-	return toResponse(product), nil
-}
-
-func (s *service) Delete(supplierID, productID int) error {
-	product, err := s.repo.FindByID(productID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrNotFound
-		}
-		return err
-	}
-	if product.SupplierID != supplierID {
-		return ErrForbidden
-	}
-	return s.repo.Delete(productID)
 }

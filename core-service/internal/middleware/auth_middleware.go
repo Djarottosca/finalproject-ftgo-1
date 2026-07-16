@@ -29,3 +29,9 @@ func AuthMiddleware(authManager *jwt.AuthManager) echo.MiddlewareFunc {
 		}
 	}
 }
+
+// scope per-user cart, order
+func UserIDFromContext(c echo.Context) (int, bool) {
+	userID, ok := c.Get("user_id").(int)
+	return userID, ok
+}

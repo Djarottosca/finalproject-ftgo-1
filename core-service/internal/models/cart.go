@@ -2,13 +2,13 @@ package models
 
 import "time"
 
-// Cart has no own id; one row per (user, product), per migration 000008.
 type Cart struct {
-	UserID    int `gorm:"column:user_id;primaryKey"`
-	ProductID int `gorm:"column:product_id;primaryKey"`
-	Qty       int `gorm:"column:qty;not null"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	UserID    int       `gorm:"column:user_id;primaryKey"`
+	ProductID uint64    `gorm:"column:product_id;primaryKey"`
+	Product   Product   `gorm:"foreignKey:ProductID;references:ID"`
+	Qty       int       `gorm:"column:qty"`
+	CreatedAt time.Time `gorm:"column:created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
 
 func (Cart) TableName() string {
