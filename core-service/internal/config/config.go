@@ -9,15 +9,28 @@ import (
 )
 
 type Config struct {
-	App       AppConfig
-	Database  DatabaseConfig
-	Redis     RedisConfig
-	JWTSecret string
+	App           AppConfig
+	Database      DatabaseConfig
+	Redis         RedisConfig
+	Notification  NotificationConfig
+	JWTSecret     string
 
 	// PaymentServiceAddr is the gRPC address of payment-service. It differs
 	// per environment (localhost in dev, a service name in deploy), so it's
 	// config, never hardcoded.
 	PaymentServiceAddr string
+}
+
+// NotificationConfig: alamat gRPC notification-service, dibaca dari
+// NOTIFICATION_HOST/NOTIFICATION_PORT di .env (bukan NOTIFICATION_ENV/PORT
+// milik service itu sendiri, ini alamat buat core konek ke sana).
+type NotificationConfig struct {
+	Host string
+	Port int
+}
+
+func (c *NotificationConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
 type AppConfig struct {
@@ -73,6 +86,8 @@ func Load() (*Config, error) {
 	v.SetDefault("REDIS_PORT", 6379)
 	v.SetDefault("REDIS_DB", 0)
 	v.SetDefault("PAYMENT_SERVICE_ADDR", "localhost:9001")
+	v.SetDefault("NOTIFICATION_HOST", "localhost")
+	v.SetDefault("NOTIFICATION_PORT", 9002)
 
 	cfg := &Config{
 		App: AppConfig{
@@ -94,8 +109,12 @@ func Load() (*Config, error) {
 			Password: v.GetString("REDIS_PASSWORD"),
 			DB:       v.GetInt("REDIS_DB"),
 		},
-		JWTSecret:          v.GetString("JWT_SECRET"),
 		PaymentServiceAddr: v.GetString("PAYMENT_SERVICE_ADDR"),
+		Notification: NotificationConfig{
+			Host: v.GetString("NOTIFICATION_HOST"),
+			Port: v.GetInt("NOTIFICATION_PORT"),
+		},
+		JWTSecret: v.GetString("JWT_SECRET"),
 	}
 
 	return cfg, nil

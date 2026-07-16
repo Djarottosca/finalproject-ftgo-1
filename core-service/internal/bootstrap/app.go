@@ -36,9 +36,11 @@ import (
 )
 
 type App struct {
-	Config   *config.Config
-	Database *gorm.DB
-	Redis    *redis.Client
+	Config             *config.Config
+	Database           *gorm.DB
+	Redis              *redis.Client
+	NotificationConn   *grpc.ClientConn
+	NotificationClient *grpcclient.NotificationClient
 }
 
 func NewApp() *App {
@@ -59,12 +61,24 @@ func NewApp() *App {
 		logger.Log.Fatal().Err(err).Msg("failed to connect redis")
 	}
 
+	// jalan di jaringan internal/dev, belum ada TLS antar service.
+	notifConn, err := grpc.NewClient(
+		cfg.Notification.Addr(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		logger.Log.Fatal().Err(err).Str("addr", cfg.Notification.Addr()).Msg("failed to connect notification-service")
+	}
+	notifClient := grpcclient.NewNotificationClient(notifConn)
+
 	logger.Log.Info().Msg("app bootstrapped")
 
 	return &App{
-		Config:   cfg,
-		Database: db,
-		Redis:    rdb,
+		Config:             cfg,
+		Database:           db,
+		Redis:              rdb,
+		NotificationConn:   notifConn,
+		NotificationClient: notifClient,
 	}
 }
 
@@ -122,7 +136,7 @@ func (a *App) RunServer() {
 	cartHandler := cart.NewHandler(cart.NewService(cartRepo, productRepo))
 
 	orderRepo := order.NewRepository(a.Database)
-	orderHandler := order.NewHandler(order.NewService(orderRepo, cartRepo), supplierRepo)
+	orderHandler := order.NewHandler(order.NewService(orderRepo, cartRepo, userRepo, a.NotificationClient), supplierRepo)
 
 	paymentRepo := payment.NewRepository(a.Database)
 	paymentHandler := payment.NewHandler(payment.NewService(paymentRepo, paymentClient))
@@ -192,6 +206,11 @@ func (a *App) RunServer() {
 	logger.Log.Info().Msg("shutting down")
 	if err := e.Shutdown(context.Background()); err != nil {
 		logger.Log.Fatal().Err(err).Msg("server shutdown error")
+	}
+	if a.NotificationConn != nil {
+		if err := a.NotificationConn.Close(); err != nil {
+			logger.Log.Warn().Err(err).Msg("failed to close notification-service connection")
+		}
 	}
 }
 
