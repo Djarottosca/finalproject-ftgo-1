@@ -9,10 +9,23 @@ import (
 )
 
 type Config struct {
-	App       AppConfig
-	Database  DatabaseConfig
-	Redis     RedisConfig
-	JWTSecret string
+	App          AppConfig
+	Database     DatabaseConfig
+	Redis        RedisConfig
+	Notification NotificationConfig
+	JWTSecret    string
+}
+
+// NotificationConfig: alamat gRPC notification-service, dibaca dari
+// NOTIFICATION_HOST/NOTIFICATION_PORT di .env (bukan NOTIFICATION_ENV/PORT
+// milik service itu sendiri, ini alamat buat core konek ke sana).
+type NotificationConfig struct {
+	Host string
+	Port int
+}
+
+func (c *NotificationConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
 type AppConfig struct {
@@ -67,6 +80,8 @@ func Load() (*Config, error) {
 	v.SetDefault("DB_SSLMODE", "disable")
 	v.SetDefault("REDIS_PORT", 6379)
 	v.SetDefault("REDIS_DB", 0)
+	v.SetDefault("NOTIFICATION_HOST", "localhost")
+	v.SetDefault("NOTIFICATION_PORT", 9002)
 
 	cfg := &Config{
 		App: AppConfig{
@@ -87,6 +102,10 @@ func Load() (*Config, error) {
 			Port:     v.GetInt("REDIS_PORT"),
 			Password: v.GetString("REDIS_PASSWORD"),
 			DB:       v.GetInt("REDIS_DB"),
+		},
+		Notification: NotificationConfig{
+			Host: v.GetString("NOTIFICATION_HOST"),
+			Port: v.GetInt("NOTIFICATION_PORT"),
 		},
 		JWTSecret: v.GetString("JWT_SECRET"),
 	}

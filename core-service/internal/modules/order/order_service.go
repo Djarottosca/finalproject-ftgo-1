@@ -3,11 +3,15 @@ package order
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/grpcclient"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/cart"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/user"
+	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
 )
 
 var (
@@ -27,13 +31,17 @@ type Service interface {
 }
 
 type service struct {
-	repo     Repository
-	cartRepo cart.Repository
+	repo        Repository
+	cartRepo    cart.Repository
+	userRepo    user.Repository
+	notifClient *grpcclient.NotificationClient
 }
 
-// NewService returns the Service implementation backed by the given repositories.
-func NewService(repo Repository, cartRepo cart.Repository) Service {
-	return &service{repo: repo, cartRepo: cartRepo}
+// NewService returns the Service implementation backed by the given
+// repositories. notifClient boleh nil (mis. di unit test) — kalau nil,
+// pengiriman email dilewati tanpa error.
+func NewService(repo Repository, cartRepo cart.Repository, userRepo user.Repository, notifClient *grpcclient.NotificationClient) Service {
+	return &service{repo: repo, cartRepo: cartRepo, userRepo: userRepo, notifClient: notifClient}
 }
 
 // Checkout converts the user's cart into an order + order items, copying
@@ -176,5 +184,39 @@ func (s *service) UpdateStatus(ctx context.Context, supplierID, orderID int, req
 		return nil, err
 	}
 
+	s.notifyStatusChange(ctx, o)
+
 	return toResponse(o, items), nil
+}
+
+// notifyStatusChange kirim email ke user pemilik order lewat notification-service.
+// Sengaja fire-and-forget: gagal kirim email cuma di-log, gak bikin
+// UpdateStatus ikut gagal — status order di DB sudah berhasil berubah.
+func (s *service) notifyStatusChange(ctx context.Context, o *models.Order) {
+	if s.notifClient == nil {
+		return
+	}
+
+	u, err := s.userRepo.FindByID(ctx, o.UserID)
+	if err != nil {
+		logger.Log.Warn().Err(err).Int("order_id", o.ID).Msg("gagal ambil data user buat notifikasi email")
+		return
+	}
+
+	subject := fmt.Sprintf("Update Pesanan #%d", o.ID)
+	html := fmt.Sprintf(
+		"<p>Halo %s,</p><p>Status pesanan <b>#%d</b> kamu sekarang: <b>%s</b>.</p>",
+		u.FullName, o.ID, o.Status,
+	)
+	text := fmt.Sprintf("Halo %s, status pesanan #%d kamu sekarang: %s.", u.FullName, o.ID, o.Status)
+
+	if _, err := s.notifClient.SendEmail(ctx, grpcclient.EmailInput{
+		ToEmail:     u.Email,
+		ToName:      u.FullName,
+		Subject:     subject,
+		HTMLContent: html,
+		TextContent: text,
+	}); err != nil {
+		logger.Log.Warn().Err(err).Int("order_id", o.ID).Msg("gagal kirim email notifikasi status order")
+	}
 }
