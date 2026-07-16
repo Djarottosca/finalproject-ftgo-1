@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	echo "github.com/labstack/echo/v4"
 
@@ -16,6 +17,12 @@ func AuthMiddleware(authManager *jwt.AuthManager) echo.MiddlewareFunc {
 			if tokenString == "" {
 				return response.ErrorResponse(c, http.StatusUnauthorized, "token tidak ditemukan")
 			}
+
+			// Check token that have 'Bearer' prefix
+			if !strings.HasPrefix(tokenString, "Bearer ") {
+				return response.ErrorResponse(c, http.StatusUnauthorized, "token tidak valid")
+			}
+			tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
 			claims, err := authManager.VerifyToken(tokenString)
 			if err != nil {
