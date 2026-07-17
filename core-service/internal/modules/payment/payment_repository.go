@@ -18,6 +18,7 @@ type Repository interface {
 	FindOrderByID(ctx context.Context, id int) (*models.Order, error)
 	FindUserByID(ctx context.Context, id int) (*models.User, error)
 	FindPaymentByOrderID(ctx context.Context, orderID int) (*models.Payment, error)
+	FindPaymentByReference(ctx context.Context, reference string) (*models.Payment, error)
 	CreatePayment(ctx context.Context, p *models.Payment) error
 	UpdatePaymentStatus(ctx context.Context, p *models.Payment) error
 }
@@ -50,6 +51,17 @@ func (r *gormRepository) FindUserByID(ctx context.Context, id int) (*models.User
 func (r *gormRepository) FindPaymentByOrderID(ctx context.Context, orderID int) (*models.Payment, error) {
 	var p models.Payment
 	if err := r.db.WithContext(ctx).Where("order_id = ?", orderID).First(&p).Error; err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// FindPaymentByReference looks up a payment by the Xendit payment_session_id
+// stored at creation time (payment_reference column) — the webhook only
+// carries that ID, never our own payments.id or order_id.
+func (r *gormRepository) FindPaymentByReference(ctx context.Context, reference string) (*models.Payment, error) {
+	var p models.Payment
+	if err := r.db.WithContext(ctx).Where("payment_reference = ?", reference).First(&p).Error; err != nil {
 		return nil, err
 	}
 	return &p, nil

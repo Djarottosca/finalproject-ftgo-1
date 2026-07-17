@@ -22,6 +22,11 @@ type Config struct {
 
 	JWTSecret string
 
+	// XenditWebhookToken verifies the x-callback-token header on inbound
+	// Xendit webhooks — set on the Xendit dashboard's webhook page, not the
+	// same secret as XENDIT_API_KEY (which lives in payment-service).
+	XenditWebhookToken string
+
 	RajaOngkir RajaOngkirConfig
 }
 
@@ -108,6 +113,7 @@ func Load() (*Config, error) {
 		PaymentServiceAddr:      v.GetString("PAYMENT_SERVICE_ADDR"),
 		NotificationServiceAddr: v.GetString("NOTIFICATION_SERVICE_ADDR"),
 		JWTSecret:               v.GetString("JWT_SECRET"),
+		XenditWebhookToken:      v.GetString("XENDIT_WEBHOOK_TOKEN"),
 		RajaOngkir: RajaOngkirConfig{
 			BaseURL: v.GetString("RAJAONGKIR_BASE_URL"),
 			ApiKey:  v.GetString("RAJAONGKIR_API_KEY"),

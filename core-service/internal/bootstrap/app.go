@@ -36,6 +36,7 @@ import (
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/shipping"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/supplier"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/user"
+	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/modules/webhook"
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/task"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/jwt"
 	"github.com/Djarottosca/finalproject-ftgo-1/pkg/logger"
@@ -177,6 +178,10 @@ func (a *App) RunServer() {
 	reviewRepo := review.NewRepository(a.Database)
 	reviewService := review.NewService(reviewRepo, productRepo)
 	reviewHandler := review.NewHandler(reviewService)
+
+	webhookService := webhook.NewService(paymentRepo, orderRepo, emailQueue)
+	webhookHandler := webhook.NewHandler(webhookService, a.Config.XenditWebhookToken)
+	e.POST("/webhooks/xendit", webhookHandler.XenditWebhook)
 
 	v1 := e.Group("/api/v1")
 
