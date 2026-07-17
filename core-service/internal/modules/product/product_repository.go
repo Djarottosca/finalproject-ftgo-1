@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/Djarottosca/finalproject-ftgo-1/core-service/internal/models"
 )
@@ -118,9 +119,8 @@ func (r *gormRepository) Create(ctx context.Context, product *models.Product) er
 }
 
 func (r *gormRepository) Update(ctx context.Context, product *models.Product) error {
-	return r.db.WithContext(ctx).Save(product).Error
+	return r.db.WithContext(ctx).Omit(clause.Associations).Save(product).Error
 }
-
 func (r *gormRepository) Delete(ctx context.Context, id int) error {
 	return r.db.WithContext(ctx).Delete(&models.Product{}, id).Error
 }
